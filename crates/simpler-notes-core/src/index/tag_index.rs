@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use dashmap::DashMap;
+
 #[derive(Debug, Default)]
 pub struct TagIndex {
     tags: DashMap<String, Vec<PathBuf>>,
