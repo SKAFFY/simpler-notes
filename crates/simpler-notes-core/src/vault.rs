@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::thread;
 
 use crate::index::ConcurrentIndex;
 use crate::note::Note;
@@ -36,20 +37,26 @@ impl Vault {
     }
 
     pub fn rebuild_index(&self) {
-        self.index.clear();
-        let md_files = walkdir(&self.path);
-        let notes: Vec<Note> = md_files
-            .iter()
-            .filter_map(|path| {
-                std::fs::read_to_string(path)
-                    .ok()
-                    .map(|content| parser::parse_note(path, &content))
-            })
-            .collect();
+        let index = self.index.clone();
+        let vault_path = self.path.clone();
 
-        for note in &notes {
-            self.index.index_note(note);
-        }
+        thread::spawn(move || {
+            index.clear();
+            let md_files = walkdir(&vault_path);
+            let notes: Vec<Note> = md_files
+                .iter()
+                .filter_map(|path| {
+                    std::fs::read_to_string(path)
+                        .ok()
+                        .map(|content| parser::parse_note(path, &content))
+                })
+                .collect();
+
+            for note in &notes {
+                index.index_note(note);
+            }
+        });
+
     }
 
     pub fn search(&self, query_str: &str) -> Result<Vec<SearchResult>, String> {
