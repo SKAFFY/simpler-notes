@@ -38,7 +38,7 @@ impl Vault {
         };
 
         let vault = Self { path, index };
-        vault.rebuild_index();
+        vault.rebuild_index_sync();
         Ok(vault)
     }
 
@@ -47,25 +47,34 @@ impl Vault {
         let vault_path = self.path.clone();
 
         thread::spawn(move || {
-            index.clear();
-            let md_files = walkdir(&vault_path);
-            let notes: Vec<Note> = md_files
-                .iter()
-                .filter_map(|path| {
-                    std::fs::read_to_string(path)
-                        .ok()
-                        .map(|content| parser::parse_note(path, &content))
-                })
-                .collect();
-
-            for note in &notes {
-                index.index_note(note);
-            }
-            let _ = index.save(&vault_path.join(".index"));
+            rebuild_index_sync(&index, &vault_path);
         });
-
     }
 
+    pub fn rebuild_index_sync(&self) {
+        rebuild_index_sync(&self.index, &self.path);
+    }
+}
+
+fn rebuild_index_sync(index: &ConcurrentIndex, vault_path: &Path) {
+    index.clear();
+    let md_files = walkdir(vault_path);
+    let notes: Vec<Note> = md_files
+        .iter()
+        .filter_map(|path| {
+            std::fs::read_to_string(path)
+                .ok()
+                .map(|content| parser::parse_note(path, &content))
+        })
+        .collect();
+
+    for note in &notes {
+        index.index_note(note);
+    }
+    let _ = index.save(&vault_path.join(".index"));
+}
+
+impl Vault {
     pub fn search(&self, query_str: &str) -> Result<Vec<SearchResult>, String> {
         let query = search::parse_query(query_str)?;
         let paths = search::execute_query(&self.index, &query);
@@ -111,6 +120,10 @@ impl Vault {
 
     pub fn get_all_tags(&self) -> Vec<String> {
         self.index.tags.all_tags()
+    }
+
+    pub fn get_all_dates(&self) -> Vec<(chrono::NaiveDate, Vec<std::path::PathBuf>)> {
+        self.index.dates.all_dates()
     }
 
     pub fn validate_indexes(&self) -> IndexReport {
