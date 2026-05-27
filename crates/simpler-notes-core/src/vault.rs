@@ -30,7 +30,13 @@ impl Vault {
             return Err(format!("Path is not a directory: {}", path.display()));
         }
 
-        let index = Arc::new(ConcurrentIndex::new());
+        let index_dir = path.join(".index");
+        let index = if index_dir.exists() {
+            Arc::new(ConcurrentIndex::load(&index_dir).unwrap_or_default())
+        } else {
+            Arc::new(ConcurrentIndex::new())
+        };
+
         let vault = Self { path, index };
         vault.rebuild_index();
         Ok(vault)
@@ -55,6 +61,7 @@ impl Vault {
             for note in &notes {
                 index.index_note(note);
             }
+            let _ = index.save(&vault_path.join(".index"));
         });
 
     }
@@ -97,6 +104,7 @@ impl Vault {
 
         let note = parser::parse_note(&full_path, content);
         self.index.index_note(&note);
+        let _ = self.index.save(&self.path.join(".index"));
 
         Ok(())
     }
