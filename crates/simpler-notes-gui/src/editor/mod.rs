@@ -30,6 +30,28 @@ impl Render for EditorContainer {
         let source_handle = self.state.clone();
         let preview_handle = self.state.clone();
 
+        let source = SourceEditor::new(self.state.clone());
+        let preview = PreviewRenderer::new(self.state.clone());
+
+        let content: gpui::AnyElement = match mode {
+            EditorMode::Source => source.into_any_element(),
+            EditorMode::Preview => preview.into_any_element(),
+            EditorMode::Split => {
+                h_flex()
+                    .flex_1()
+                    .size_full()
+                    .child(source)
+                    .child(
+                        div()
+                            .w(px(1.))
+                            .h_full()
+                            .bg(rgb(0x3c3c3c)),
+                    )
+                    .child(preview)
+                    .into_any_element()
+            }
+        };
+
         div()
             .flex_1()
             .flex()
@@ -87,6 +109,6 @@ impl Render for EditorContainer {
                             .child(mode_name),
                     ),
             )
-            .child(SourceEditor)
+            .child(content)
     }
 }

@@ -25,7 +25,7 @@ impl Render for Workspace {
             .flex_col()
             .size_full()
             .bg(rgb(0x1e1e1e))
-            .child(MenuBar)
+            .child(MenuBar::new(self.state.clone()))
             .child(
                 h_flex()
                     .flex_1()

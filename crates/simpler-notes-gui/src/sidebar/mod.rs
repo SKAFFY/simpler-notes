@@ -43,6 +43,6 @@ impl Render for Sidebar {
                             }),
                     ),
             )
-            .child(FileTree)
+            .child(FileTree::new(self.state.clone()))
     }
 }
