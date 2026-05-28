@@ -1,8 +1,6 @@
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::PathBuf;
 
 use gpui::Context;
-use simpler_notes_core::vault::Vault;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum EditorMode {
@@ -14,53 +12,53 @@ pub enum EditorMode {
 pub struct OpenTab {
     pub path: PathBuf,
     pub title: String,
-    pub content_dirty: bool,
     pub source_content: String,
 }
 
 pub struct AppState {
-    pub vault: Option<Arc<Vault>>,
     pub vault_path: Option<PathBuf>,
     pub open_tabs: Vec<OpenTab>,
     pub active_tab: Option<usize>,
     pub editor_mode: EditorMode,
-    pub sidebar_visible: bool,
-    pub search_query: String,
+    pub collapsed: bool,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
-            vault: None,
             vault_path: None,
             open_tabs: Vec::new(),
             active_tab: None,
             editor_mode: EditorMode::Source,
-            sidebar_visible: true,
-            search_query: String::new(),
+            collapsed: false,
         }
     }
 
-    pub fn set_editor_mode(&mut self, mode: EditorMode, _cx: &mut Context<Self>) {
-        self.editor_mode = mode;
+    pub fn toggle_collapsed(&mut self, _cx: &mut Context<Self>) {
+        self.collapsed = !self.collapsed;
         _cx.notify();
     }
 
-    pub fn set_search_query(&mut self, query: &str, _cx: &mut Context<Self>) {
-        self.search_query = query.to_string();
+    pub fn open_vault(&mut self, path: &PathBuf, _cx: &mut Context<Self>) {
+        self.vault_path = Some(path.clone());
         _cx.notify();
     }
 
-    pub fn open_vault(&mut self, path: &Path, cx: &mut Context<Self>) {
-        match Vault::open(path) {
-            Ok(vault) => {
-                self.vault = Some(Arc::new(vault));
-                self.vault_path = Some(path.to_owned());
-                cx.notify();
+    pub fn list_markdown_files(&self) -> Vec<PathBuf> {
+        match &self.vault_path {
+            Some(vault_path) => {
+                walkdir::WalkDir::new(vault_path)
+                    .max_depth(1)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.file_type().is_file()
+                            && e.path().extension().map(|e| e == "md").unwrap_or(false)
+                    })
+                    .map(|e| e.path().to_owned())
+                    .collect()
             }
-            Err(e) => {
-                eprintln!("Failed to open vault: {}", e);
-            }
+            None => Vec::new(),
         }
     }
 
@@ -74,24 +72,27 @@ impl AppState {
         match already_open {
             Some(idx) => {
                 self.active_tab = Some(idx);
-                self.editor_mode = EditorMode::Source;
             }
             None => {
                 let content = std::fs::read_to_string(&path).unwrap_or_default();
                 self.open_tabs.push(OpenTab {
-                    path: path.clone(),
+                    path,
                     title,
-                    content_dirty: false,
                     source_content: content,
                 });
                 self.active_tab = Some(self.open_tabs.len() - 1);
-                self.editor_mode = EditorMode::Source;
             }
         }
+        self.editor_mode = EditorMode::Source;
         cx.notify();
     }
 
-    pub fn close_tab(&mut self, idx: usize, _cx: &mut Context<Self>) {
+    pub fn select_tab(&mut self, idx: usize, _cx: &mut Context<Self>) {
+        self.active_tab = Some(idx);
+        _cx.notify();
+    }
+
+    pub fn close_tab(&mut self, idx: usize, cx: &mut Context<Self>) {
         if idx < self.open_tabs.len() {
             self.open_tabs.remove(idx);
             match self.active_tab {
@@ -108,6 +109,6 @@ impl AppState {
                 _ => {}
             }
         }
-        _cx.notify();
+        cx.notify();
     }
 }

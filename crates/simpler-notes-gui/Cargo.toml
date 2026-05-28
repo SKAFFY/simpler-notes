@@ -7,6 +7,7 @@ edition = "2021"
 gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
 gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", features = ["font-kit", "wayland"] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
 simpler-notes-core = { path = "../simpler-notes-core" }
 walkdir = "2"
 regex = "1"
