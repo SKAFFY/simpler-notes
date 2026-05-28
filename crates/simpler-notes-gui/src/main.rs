@@ -1,3 +1,9 @@
+mod app_state;
+mod editor;
+mod menu;
+mod sidebar;
+mod workspace;
+
 use gpui::*;
 use gpui_platform::application;
 
