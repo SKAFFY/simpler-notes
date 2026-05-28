@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui::Context;
@@ -51,25 +51,44 @@ impl AppState {
         _cx.notify();
     }
 
-    pub fn open_file(&mut self, path: PathBuf, _cx: &mut Context<Self>) {
+    pub fn open_vault(&mut self, path: &Path, cx: &mut Context<Self>) {
+        match Vault::open(path) {
+            Ok(vault) => {
+                self.vault = Some(Arc::new(vault));
+                self.vault_path = Some(path.to_owned());
+                cx.notify();
+            }
+            Err(e) => {
+                eprintln!("Failed to open vault: {}", e);
+            }
+        }
+    }
+
+    pub fn open_file(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let title = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
+
         let already_open = self.open_tabs.iter().position(|t| t.path == path);
         match already_open {
-            Some(idx) => self.active_tab = Some(idx),
+            Some(idx) => {
+                self.active_tab = Some(idx);
+                self.editor_mode = EditorMode::Source;
+            }
             None => {
+                let content = std::fs::read_to_string(&path).unwrap_or_default();
                 self.open_tabs.push(OpenTab {
                     path: path.clone(),
                     title,
                     content_dirty: false,
-                    source_content: String::new(),
+                    source_content: content,
                 });
                 self.active_tab = Some(self.open_tabs.len() - 1);
+                self.editor_mode = EditorMode::Source;
             }
         }
-        _cx.notify();
+        cx.notify();
     }
 
     pub fn close_tab(&mut self, idx: usize, _cx: &mut Context<Self>) {
