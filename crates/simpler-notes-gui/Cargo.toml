@@ -11,3 +11,6 @@ simpler-notes-core = { path = "../simpler-notes-core" }
 [features]
 default = []
 git = ["simpler-notes-core/git"]
+wayland = ["gpui-platform/wayland"]
+x11 = ["gpui-platform/x11"]
+metal = ["gpui-platform/metal"]
