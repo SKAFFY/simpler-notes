@@ -1,13 +1,27 @@
 use gpui::*;
 
+use crate::app_state::AppState;
 use crate::sidebar::file_tree::FileTree;
 
 pub mod file_tree;
 
-pub struct Sidebar;
+pub struct Sidebar {
+    state: View<AppState>,
+}
+
+impl Sidebar {
+    pub fn new(state: View<AppState>) -> Self {
+        Self { state }
+    }
+}
 
 impl Render for Sidebar {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let state = self.state.read(cx);
+        let search_query = state.search_query.clone();
+
+        let state_handle = self.state.clone().downgrade();
+
         div()
             .w(px(250.))
             .h_full()
@@ -20,14 +34,13 @@ impl Render for Sidebar {
                 div()
                     .p(8.)
                     .child(
-                        div()
-                            .bg(rgb(0x3c3c3c))
-                            .px(8.)
-                            .py(4.)
-                            .rounded(4.)
-                            .text_sm()
-                            .text_color(rgb(0x888888))
-                            .child("Search..."),
+                        TextInput::new("sidebar-search", search_query)
+                            .placeholder("Search...")
+                            .on_input(move |text, cx| {
+                                if let Some(state) = state_handle.upgrade() {
+                                    state.update(cx, |s, cx| s.set_search_query(&text, cx));
+                                }
+                            }),
                     ),
             )
             .child(FileTree)
