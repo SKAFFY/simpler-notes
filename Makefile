@@ -1,4 +1,7 @@
-.PHONY: all build build-git test test-git test-vault clean
+UNAME_S := $(shell uname -s)
+
+.PHONY: all build build-git build-all build-gui run-gui test test-git test-all \
+        test-vault test-watcher test-verbose fmt fmt-check lint clean doc doc-open
 
 all: build test
 
@@ -11,6 +14,21 @@ build-git:
 
 build-all:
 	cargo build --workspace
+
+# GUI
+build-gui:
+ifeq ($(UNAME_S),Darwin)
+	@echo "GUI not available on macOS without Xcode. Skipping."
+else
+	cargo build -p simpler-notes-gui
+endif
+
+run-gui: build-gui
+ifeq ($(UNAME_S),Darwin)
+	@echo "GUI not available on macOS."
+else
+	XDG_SESSION_TYPE=Wayland WAYLAND_DISPLAY=wayland-0 ./target/debug/simpler-notes-gui
+endif
 
 # Test
 test:

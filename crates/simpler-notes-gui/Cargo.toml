@@ -5,9 +5,11 @@ edition = "2021"
 
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
-gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", features = ["font-kit"] }
+gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", features = ["font-kit", "wayland"] }
 simpler-notes-core = { path = "../simpler-notes-core" }
 
 [features]
 default = []
 git = ["simpler-notes-core/git"]
+x11 = []
+metal = []
