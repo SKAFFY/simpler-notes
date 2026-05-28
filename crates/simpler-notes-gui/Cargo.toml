@@ -1,0 +1,13 @@
+[package]
+name = "simpler-notes-gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
+gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", features = ["font-kit"] }
+simpler-notes-core = { path = "../simpler-notes-core" }
+
+[features]
+default = []
+git = ["simpler-notes-core/git"]
