@@ -18,14 +18,14 @@ build-all:
 # GUI
 build-gui:
 ifeq ($(UNAME_S),Darwin)
-	cargo build -p simpler-notes-gui --features metal
+	@echo "GUI not available on macOS without Xcode. Skipping."
 else
-	cargo build -p simpler-notes-gui --features wayland
+	cargo build -p simpler-notes-gui
 endif
 
 run-gui: build-gui
 ifeq ($(UNAME_S),Darwin)
-	./target/debug/simpler-notes-gui
+	@echo "GUI not available on macOS."
 else
 	XDG_SESSION_TYPE=Wayland WAYLAND_DISPLAY=wayland-0 ./target/debug/simpler-notes-gui
 endif
