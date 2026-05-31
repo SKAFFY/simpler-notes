@@ -14,6 +14,7 @@ rayon = "1"
 thiserror = "1"
 walkdir = "2"
 parking_lot = "0.12"
+pathdiff = "0.2"
 
 git2 = { version = "0.19", optional = true }
 

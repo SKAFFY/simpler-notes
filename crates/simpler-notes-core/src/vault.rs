@@ -28,6 +28,19 @@ pub struct Vault {
     pub search: SearchEngine,
 }
 
+pub struct IndexReport {
+    pub total_notes: usize,
+    pub total_tags: usize,
+    pub total_dates: usize,
+}
+
+/// A search result with relative path and title.
+#[derive(Debug)]
+pub struct VaultSearchResult {
+    pub path: PathBuf,
+    pub title: String,
+}
+
 impl Vault {
     pub fn open(config: VaultConfig) -> Result<Self, String> {
         let path = config.path.clone();
@@ -48,7 +61,7 @@ impl Vault {
             search: SearchEngine::new(index.clone()),
         };
 
-        vault.reindex_all()?;
+        vault.reindex_all_internal()?;
         Ok(vault)
     }
 
@@ -56,7 +69,34 @@ impl Vault {
         &self.index.diagnostics
     }
 
-    pub fn reindex_all(&self) -> Result<(), String> {
+    pub fn search(&self, query: &str) -> Result<Vec<VaultSearchResult>, String> {
+        let expr = SearchEngine::parse_query(query);
+        let results = self.search.execute_query(&expr, &self.config.path);
+        let vault_path = &self.config.path;
+        let mapped = results.iter().map(|p| {
+            let rel = pathdiff::diff_paths(p, vault_path).unwrap_or_else(|| PathBuf::from(p));
+            let title = p.rsplit('/').next().unwrap_or(p).to_string();
+            VaultSearchResult {
+                path: rel,
+                title,
+            }
+        }).collect();
+        Ok(mapped)
+    }
+
+    pub fn reindex_all(&self) -> Result<IndexReport, String> {
+        self.reindex_all_internal()?;
+        Ok(self.validate_indexes())
+    }
+
+    pub fn validate_indexes(&self) -> IndexReport {
+        let total_notes = self.list_md_files().len();
+        let total_tags = self.index.tags.all_tags().len();
+        let total_dates = self.index.dates.all_dates().len();
+        IndexReport { total_notes, total_tags, total_dates }
+    }
+
+    fn reindex_all_internal(&self) -> Result<(), String> {
         let mut _files_reindexed = 0;
 
         for entry in walkdir::WalkDir::new(&self.config.path)
@@ -78,9 +118,26 @@ impl Vault {
             _files_reindexed += 1;
         }
 
-        // Persist index after initial reindex
         self.index.save(&self.config.path)?;
         Ok(())
+    }
+
+    pub fn list_md_files(&self) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        for entry in walkdir::WalkDir::new(&self.config.path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let ext = entry.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            if self.config.extensions.contains(&ext.to_string()) {
+                files.push(entry.path().to_path_buf());
+            }
+        }
+        files
     }
 
     pub fn list_markdown_files(&self) -> Vec<PathBuf> {
@@ -157,6 +214,35 @@ mod tests {
         let vault = Vault::open(config).unwrap();
         let diags = vault.diagnostics().get(&file_path);
         assert!(!diags.is_empty(), "Expected broken link diagnostic");
+    }
+
+    #[test]
+    fn test_index_report() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "@tag1").unwrap();
+        std::fs::write(dir.path().join("b.md"), "@tag1 @tag2").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let report = vault.validate_indexes();
+        assert_eq!(report.total_notes, 2);
+        assert_eq!(report.total_tags, 2);
+    }
+
+    #[test]
+    fn test_search_via_vault() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("test.md"), "@project").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let results = vault.search("tag:project").unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_reindex_all_report() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "@tag").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let report = vault.reindex_all().unwrap();
+        assert_eq!(report.total_notes, 1);
     }
 
     #[test]
