@@ -16,13 +16,18 @@ impl GetDatesTool {
 
 impl Tool for GetDatesTool {
     fn call(&self, params: Option<Value>) -> Result<Value, (i32, String)> {
-        let dates = if let Some(p) = params {
-            let from = p.get("from").and_then(|v| v.as_str())
-                .and_then(|s| NaiveDate::parse_from_str(s, "%d.%m.%Y").ok());
-            let to = p.get("to").and_then(|v| v.as_str())
-                .and_then(|s| NaiveDate::parse_from_str(s, "%d.%m.%Y").ok());
-            match (from, to) {
-                (Some(f), Some(t)) => self.vault.get_dates_in_range(f, t),
+        let dates = if let Some(p) = &params {
+            let from_str = p.get("from").and_then(|v| v.as_str());
+            let to_str = p.get("to").and_then(|v| v.as_str());
+
+            match (from_str, to_str) {
+                (Some(f), Some(t)) => {
+                    let from = NaiveDate::parse_from_str(f, "%d.%m.%Y")
+                        .map_err(|_| (-32602, format!("Invalid date format for 'from': {}. Expected DD.MM.YYYY", f)))?;
+                    let to = NaiveDate::parse_from_str(t, "%d.%m.%Y")
+                        .map_err(|_| (-32602, format!("Invalid date format for 'to': {}. Expected DD.MM.YYYY", t)))?;
+                    self.vault.get_dates_in_range(from, to)
+                }
                 _ => self.vault.index.dates.all_dates(),
             }
         } else {

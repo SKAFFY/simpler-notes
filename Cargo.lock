@@ -5865,10 +5865,15 @@ dependencies = [
  "dashmap",
  "git2",
  "notify",
+ "parking_lot",
+ "pathdiff",
  "rayon",
  "regex",
  "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "walkdir",
 ]
 
 [[package]]

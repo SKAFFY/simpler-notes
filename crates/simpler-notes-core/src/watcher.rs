@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn test_watcher_creation() {
         let dir = TempDir::new().unwrap();
-        let (watcher, _rx) = Watcher::new(dir.path()).unwrap();
+        let (_watcher, _rx) = Watcher::new(dir.path()).unwrap();
         // Just verify it doesn't panic
     }
 

@@ -100,7 +100,6 @@ impl Vault {
     }
 
     fn reindex_all_internal(&self) -> Result<(), String> {
-        let mut _files_reindexed = 0;
 
         for entry in walkdir::WalkDir::new(&self.config.path)
             .into_iter()
@@ -118,7 +117,6 @@ impl Vault {
             let content = std::fs::read_to_string(entry.path())
                 .map_err(|e| format!("Failed to read {:?}: {}", entry.path(), e))?;
             self.index.reindex_file(entry.path(), &content, &self.config.path);
-            _files_reindexed += 1;
         }
 
         self.index.save(&self.config.path)?;

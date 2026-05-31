@@ -52,7 +52,10 @@ fn main() {
             Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
         };
 
-        let response_body = serde_json::to_string(&response).unwrap();
+        let response_body = serde_json::to_string(&response).unwrap_or_else(|e| {
+            eprintln!("Serialization error: {}", e);
+            String::from("{}")
+        });
         if let Err(e) = McpTransport::write_message(&response_body) {
             eprintln!("Write error: {}", e);
             break;
