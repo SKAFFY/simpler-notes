@@ -49,15 +49,11 @@ impl ConcurrentIndex {
     pub fn reindex_file(&self, path: &Path, content: &str, vault_path: &Path) {
         use crate::parser::parse_content;
 
-        if let Some(old_state) = self.file_states.get(path) {
-            for tag in &old_state.tags {
-                self.tags.remove(path, tag);
-            }
-            for date in &old_state.dates {
-                self.dates.remove(path, *date);
-            }
-        }
+        // Always remove old state before reindexing
+        self.tags.remove_file(path);
+        self.dates.remove_file(path);
         self.links.remove_file(path);
+        self.diagnostics.remove(path);
 
         let result = parse_content(content);
 
@@ -87,10 +83,9 @@ impl ConcurrentIndex {
         }
 
         // Diagnostics
-        self.diagnostics.remove(path);
         self.diagnostics.check_file(path, content, vault_path);
 
-            self.file_states.insert(path.to_path_buf(), FileIndexState {
+        self.file_states.insert(path.to_path_buf(), FileIndexState {
             tags: result.tags.iter().map(|t| t.name.clone()).collect(),
             dates: result.dates.iter().map(|d| d.date).collect(),
         });
