@@ -354,6 +354,78 @@ mod tests {
     }
 
     #[test]
+    fn test_get_dates_in_range() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("note.md"), "!21.06.2027\n\ncontent @test").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let from = NaiveDate::from_ymd_opt(2027, 5, 1).unwrap();
+        let to = NaiveDate::from_ymd_opt(2027, 7, 1).unwrap();
+        let dates = vault.get_dates_in_range(from, to);
+        assert!(!dates.is_empty(), "Expected dates in range");
+        assert_eq!(dates[0].0, NaiveDate::from_ymd_opt(2027, 6, 21).unwrap());
+        let out_of_range = vault.get_dates_in_range(
+            NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2020, 12, 31).unwrap(),
+        );
+        assert!(out_of_range.is_empty(), "Expected no dates in empty range");
+    }
+
+    #[test]
+    fn test_fuzzy_search_tags() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "@project-alpha @project-beta").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let results = vault.fuzzy_search_tags("project");
+        assert!(results.iter().any(|c| c.name == "project-alpha"), "Should find by substring");
+    }
+
+    #[test]
+    fn test_autocomplete_links() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "[[target-note]]").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let results = vault.autocomplete_links("target");
+        assert!(!results.is_empty(), "Expected autocomplete results");
+        assert!(results[0].contains("target-note"));
+    }
+
+    #[test]
+    fn test_autocomplete_dates() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("note.md"), "!25.12.2027\n\ntext").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let results = vault.autocomplete_dates("2027-12");
+        assert!(!results.is_empty(), "Expected date autocomplete results");
+        assert!(results.iter().any(|d| d == "2027-12-25"));
+    }
+
+    #[test]
+    fn test_get_backlinks() {
+        let dir = TempDir::new().unwrap();
+        let a_path = dir.path().join("a.md");
+        let b_path = dir.path().join("b.md");
+        std::fs::write(&a_path, "[[b]]").unwrap();
+        std::fs::write(&b_path, "content").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let backlinks = vault.get_backlinks(&PathBuf::from("b"));
+        assert!(!backlinks.is_empty(), "Expected backlinks");
+        assert_eq!(backlinks[0].source, a_path);
+    }
+
+    #[test]
+    fn test_get_outgoing_links() {
+        let dir = TempDir::new().unwrap();
+        let a_path = dir.path().join("a.md");
+        let b_path = dir.path().join("b.md");
+        std::fs::write(&a_path, "[[b]]").unwrap();
+        std::fs::write(&b_path, "content").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let outgoing = vault.get_outgoing_links(&a_path);
+        assert!(!outgoing.is_empty(), "Expected outgoing links");
+        assert_eq!(outgoing[0].target, PathBuf::from("b"));
+    }
+
+    #[test]
     fn test_all_diagnostics() {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join("a.md"), "[[]]").unwrap();

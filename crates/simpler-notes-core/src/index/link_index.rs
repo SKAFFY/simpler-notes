@@ -128,6 +128,28 @@ mod tests {
     }
 
     #[test]
+    fn test_all_targets() {
+        let index = LinkIndex::new();
+        let entry_a = LinkEntry {
+            source: PathBuf::from("x.md"),
+            target: PathBuf::from("t.md"),
+            label: "T".to_string(),
+            span: ByteSpan { offset: 0, length: 10 },
+        };
+        let entry_b = LinkEntry {
+            source: PathBuf::from("y.md"),
+            target: PathBuf::from("t.md"),
+            label: "T".to_string(),
+            span: ByteSpan { offset: 0, length: 10 },
+        };
+        index.add(PathBuf::from("x.md"), entry_a);
+        index.add(PathBuf::from("y.md"), entry_b);
+        let targets = index.all_targets();
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0], PathBuf::from("t.md"));
+    }
+
+    #[test]
     fn test_clear() {
         let index = LinkIndex::new();
         let entry = LinkEntry {
