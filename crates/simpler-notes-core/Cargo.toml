@@ -11,10 +11,13 @@ regex = "1"
 chrono = { version = "0.4", features = ["serde"] }
 notify = { version = "7", features = ["macos_kqueue"] }
 rayon = "1"
+thiserror = "1"
 
-# Optional git support
 git2 = { version = "0.19", optional = true }
 
 [features]
 default = []
-git = ["git2"]
+git = ["dep:git2"]
+
+[dev-dependencies]
+tempfile = "3"
