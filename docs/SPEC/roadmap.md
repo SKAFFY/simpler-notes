@@ -37,11 +37,12 @@
 | Workspace layout | gui | P1 | Vault |
 | AppState model | gui | P1 | — |
 | File tree | gui | P1 | Workspace layout |
+| Autocomplete popup (@, [[, !) | gui | P1 | Workspace layout |
 | Source editor | gui | P1 | Workspace layout |
 | Preview editor | gui | P1 | Workspace layout, Парсер |
 | Переключение Source / Split / Preview | gui | P1 | Workspace layout |
 | Вкладки (tabs) | gui | P1 | Workspace layout |
-| Поиск в сайдбаре | gui | P1 | File tree |
+| Lower panel search | gui | P1 | Workspace layout |
 | Open vault dialog | gui | P1 | Workspace layout |
 | Первый запуск | gui | P1 | Workspace layout |
 | Навигация по [[link]] | gui | P1 | Preview editor |
@@ -53,7 +54,6 @@
 | Timeline | gui | P2 | Vault |
 | Graph View (MindMap) | gui | P2 | Vault |
 | Quick Open (Cmd+P) | gui | P2 | Vault |
-| Completion popup [[ и # | gui | P2 | Source editor |
 
 ## Полировка (P2)
 
@@ -62,5 +62,5 @@
 | Настройки приложения | gui | P2 | Vault |
 | Сохранение состояния окна | gui | P2 | Настройки |
 | Подсветка @тегов и дат | gui | P2 | Source editor |
-| Resize project panel | gui | P2 | Workspace layout |
+| Resize project panel | gui | P1 | Workspace layout |
 | Drag to reorder вкладок | gui | P2 | Вкладки |
