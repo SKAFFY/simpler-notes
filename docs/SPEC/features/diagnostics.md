@@ -95,6 +95,6 @@ fn check_file(&self, path: &Path, content: &str, vault_path: &Path) {
 ## Жизненный цикл
 
 1. При открытии vault — `reindex_all()` вызывает `check_file()` для каждого файла
-2. При каждом `save_document()` — `reindex_file()` вызывает `check_file()` для одного файла
+2. При каждом `save_buffer()` — `reindex_file()` вызывает `check_file()` для одного файла
 3. При удалении файла — `remove()` вызывается watcher'ом
 4. GUI читает diagnostics при перерисовке
