@@ -96,6 +96,85 @@ impl GitBackend {
         Ok(commits)
     }
 
+    pub fn push(&self) -> Result<(), String> {
+        let mut remote = self.repo.find_remote("origin")
+            .map_err(|e| format!("No remote 'origin': {}", e))?;
+        remote.push(&["refs/heads/master"], None)
+            .map_err(|e| format!("Push failed: {}", e))?;
+        Ok(())
+    }
+
+    pub fn pull(&self) -> Result<(), String> {
+        let mut remote = self.repo.find_remote("origin")
+            .map_err(|e| format!("No remote 'origin': {}", e))?;
+        remote.fetch(&["refs/heads/master"], None, None)
+            .map_err(|e| format!("Fetch failed: {}", e))?;
+
+        let fetch_head = self.repo.find_reference("FETCH_HEAD")
+            .map_err(|e| e.to_string())?;
+        let fetch_commit = fetch_head.peel_to_commit()
+            .map_err(|e| e.to_string())?;
+
+        let head = self.repo.head()
+            .map_err(|e| e.to_string())?;
+        let head_commit = head.peel_to_commit()
+            .map_err(|e| e.to_string())?;
+
+        if head_commit.id() == fetch_commit.id() {
+            return Ok(());
+        }
+
+        let annotated_fetch = self.repo.find_annotated_commit(fetch_commit.id())
+            .map_err(|e| e.to_string())?;
+        let mut merge_opts = git2::MergeOptions::new();
+        self.repo.merge(&[&annotated_fetch], Some(&mut merge_opts), None)
+            .map_err(|e| format!("Merge failed: {}", e))?;
+
+        if self.repo.index().map_err(|e| e.to_string())?.has_conflicts() {
+            return Err("Merge conflicts detected after pull".to_string());
+        }
+
+        let signature = self.repo.signature().map_err(|e| e.to_string())?;
+        let tree = self.repo.find_tree(
+            self.repo.index().map_err(|e| e.to_string())?.write_tree().map_err(|e| e.to_string())?
+        ).map_err(|e| e.to_string())?;
+
+        self.repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "Merge",
+            &tree,
+            &[&head_commit, &fetch_commit],
+        ).map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn unpushed_count(&self) -> Result<usize, String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let head_oid = head.peel_to_commit().map_err(|e| e.to_string())?.id();
+
+        let upstream = self.repo.find_reference("refs/remotes/origin/master");
+        match upstream {
+            Ok(up) => {
+                let up_oid = up.peel_to_commit().map_err(|e| e.to_string())?.id();
+                let mut revwalk = self.repo.revwalk().map_err(|e| e.to_string())?;
+                revwalk.push(head_oid).map_err(|e| e.to_string())?;
+                revwalk.hide(up_oid).map_err(|e| e.to_string())?;
+                Ok(revwalk.count())
+            }
+            Err(_) => {
+                let mut revwalk = self.repo.revwalk().map_err(|e| e.to_string())?;
+                revwalk.push_head().map_err(|e| e.to_string())?;
+                Ok(revwalk.count())
+            }
+        }
+    }
+
+    pub fn close(&self) {
+    }
+
     pub fn diff_unstaged(&self) -> Result<String, String> {
         let diff = self.repo.diff_index_to_workdir(
             None,
