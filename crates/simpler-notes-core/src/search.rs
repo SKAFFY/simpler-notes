@@ -186,6 +186,7 @@ fn parse_rg_line(line: &str) -> Option<SearchResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -366,5 +367,34 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let files = engine.all_indexed_files(dir.path());
         assert_eq!(files.len(), 2);
+    }
+
+    #[test]
+    fn test_execute_text_query_with_rg() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("note.md");
+        std::fs::write(&file_path, "unique-search-term-42").unwrap();
+        // open vault to create index
+        let vault_path = dir.path().to_path_buf();
+        let cfg = crate::vault::VaultConfig { path: vault_path.clone(), ..Default::default() };
+        let _vault = crate::vault::Vault::open(cfg).unwrap();
+
+        let index = crate::index::ConcurrentIndex::load(&vault_path).unwrap();
+        let engine = SearchEngine::new(Arc::new(index));
+        let results = engine.execute_query(&QueryExpr::Text("unique-search-term-42".to_string()), &vault_path);
+        assert_eq!(results.len(), 1, "rg should find the term");
+    }
+
+    #[test]
+    fn test_execute_wildcard_arm() {
+        let index = crate::index::ConcurrentIndex::new();
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let results = engine.execute_query(&QueryExpr::Before("2024".to_string()), dir.path());
+        assert!(results.is_empty());
+        let results = engine.execute_query(&QueryExpr::After("2024".to_string()), dir.path());
+        assert!(results.is_empty());
+        let results = engine.execute_query(&QueryExpr::Content("hello".to_string()), dir.path());
+        assert!(results.is_empty());
     }
 }

@@ -302,6 +302,22 @@ mod tests {
     }
 
     #[test]
+    fn test_vault_reopen_loads_persisted_index() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("test.md"), "# Hello @tag").unwrap();
+        let config = VaultConfig { path: dir.path().to_path_buf(), ..Default::default() };
+
+        // First open — creates .index/
+        let vault = Vault::open(config).unwrap();
+        assert!(!vault.index.tags.get("tag").is_empty());
+
+        // Second open — loads from persisted .index/
+        let config2 = VaultConfig { path: dir.path().to_path_buf(), ..Default::default() };
+        let vault2 = Vault::open(config2).unwrap();
+        assert!(!vault2.index.tags.get("tag").is_empty(), "Index should load from disk");
+    }
+
+    #[test]
     fn test_reindex_all_report() {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join("a.md"), "@tag").unwrap();
