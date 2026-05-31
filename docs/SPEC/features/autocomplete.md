@@ -14,7 +14,7 @@ depends: [workspace-layout]
 
 ```rust
 pub enum AutocompleteContext {
-    SourceEditor,   // @, [[, !
+    GpuiEditor,   // @, [[, !
     SearchQuery,    // ключевые слова, теги, даты
 }
 ```

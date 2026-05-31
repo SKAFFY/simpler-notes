@@ -7,7 +7,11 @@ edition = "2021"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 simpler-notes-core = { path = "../simpler-notes-core" }
+chrono = "0.4"
 
 [features]
 default = []
 git = ["simpler-notes-core/git"]
+
+[dev-dependencies]
+tempfile = "3"

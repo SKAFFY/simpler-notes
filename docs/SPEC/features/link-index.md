@@ -32,7 +32,7 @@ pub struct LinkEntry {
 Ключ: **target** — файл, на который ссылаются (PathBuf).
 Значение: список `LinkEntry` — все файлы, которые ссылаются на target + их позиции.
 
-Forward-связи (source → target) не хранятся в индексе — они уже есть в `Document.cached_metadata.links` для каждого открытого файла.
+Forward-связи (source → target) не хранятся в индексе — их можно получить через `parse_content()` для каждого открытого файла при необходимости.
 
 ## API
 
@@ -54,7 +54,7 @@ Forward-связи (source → target) не хранятся в индексе �
 
 ### outgoing
 
-`outgoing()` проходится по всему backward и собирает записи, где `source == path`. Это неэффективно для большого индекса, но forward не дублируется (он уже в `Document.cached_metadata`).
+`outgoing()` проходится по всему backward и собирает записи, где `source == path`. Это неэффективно для большого индекса, но forward не дублируется (прямые ссылки можно получить через `parse_content()`).
 
 ## Индексация
 

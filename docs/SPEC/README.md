@@ -24,7 +24,7 @@ docs/SPEC/
 │   ├── mcp-server.md          # MCP сервер (JSON-RPC)
 │   ├── workspace-layout.md    # Workspace GUI layout
 │   ├── editor-source.md       # Source редактор
-│   ├── editor-preview.md      # Preview режим
+│   ├── editor-preview.md      # Source (gpui::Editor) и Preview режимы
 │   ├── lower-panel-search.md    # Поиск по query language (нижняя панель)
 │   ├── file-tree.md           # Файловое дерево
 │   ├── open-vault-dialog.md   # Диалог открытия vault

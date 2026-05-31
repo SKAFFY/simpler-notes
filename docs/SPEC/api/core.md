@@ -33,34 +33,52 @@ pub struct ParseError { pub span: ByteSpan, pub message: String, pub kind: Parse
 pub enum ParseErrorKind { InvalidDate, EmptyLink }
 ```
 
-### `document`
+### `buffer`
+
+Простая модель файла в памяти. Не зависит от GUI. Используется как MCP (headless), так и GUI.
 
 ```rust
-pub struct Document {
+pub struct Buffer {
     pub path: Option<PathBuf>,
-    pub text: Rope,
-    pub cached_metadata: Option<AnchoredMetadata>,
+    pub text: String,
     pub saved_revision: u64,
     pub current_revision: u64,
 }
 
-impl Document {
+impl Buffer {
     pub fn open(path: &Path) -> Result<Self>;
-    pub fn snapshot(&self) -> RopeSlice;
-    pub fn apply_edit(&mut self, start: usize, end: usize, text: &str) -> u64;
-    pub fn parse_and_update(&mut self);
     pub fn save(&mut self) -> Result<()>;
     pub fn is_dirty(&self) -> bool;
-    pub fn anchor_to_line_col(&self, anchor: &Anchor) -> (usize, usize);  // Anchor из note_model
-}
-
-pub struct AnchoredMetadata {
-    pub links: Vec<AnchoredLink>,
-    pub tags: Vec<AnchoredTag>,
-    pub dates: Vec<AnchoredDate>,
-    pub errors: Vec<AnchoredError>,
 }
 ```
+
+| Метод | Описание |
+|-------|----------|
+| `open(path)` | Читает файл с диска в `text`, выставляет `saved_revision = 0, current_revision = 0` |
+| `save()` | Пишет `text` на диск, `saved_revision = current_revision` |
+| `is_dirty()` | `current_revision != saved_revision` |
+
+### `editor` (GUI-only)
+
+В GUI-крейте Buffer оборачивается в `gpui::Editor`:
+
+```rust
+// simpler-notes-gui, не в core
+pub struct OpenTab {
+    pub path: PathBuf,
+    pub title: String,
+    pub editor: gpui::View<gpui::Editor>,
+    pub buffer: Arc<RwLock<Buffer>>,
+}
+```
+
+Поток данных:
+1. `vault.open_buffer(path)` → `Buffer` (core)
+2. `editor.set_text(buffer.text)` (GUI)
+3. Пользователь редактирует через gpui::Editor (GUI)
+4. При сохранении: `buffer.text = editor.text()`, `vault.save_buffer(buffer)` (core)
+
+gpui::Editor сам управляет Anchor, undo/redo, selection. Core ничего не знает об этом.
 
 ### `diagnostics`
 
@@ -136,12 +154,11 @@ pub struct IndexReport { pub total_notes, pub total_tags, pub total_dates }
 impl Vault {
     pub fn open(path: &Path) -> Result<Self, String>;
     pub fn list_md_files(&self) -> Vec<PathBuf>;
-    pub fn open_document(&self, path: &Path) -> Result<Document, String>;
-    pub fn save_document(&self, doc: &mut Document) -> Result<(), String>;
+    pub fn open_buffer(&self, path: &Path) -> Result<Buffer, String>;
+    pub fn save_buffer(&self, buf: &mut Buffer) -> Result<(), String>;
     pub fn search(&self, query: &str) -> Result<Vec<SearchResult>, String>;
     pub fn read_note(&self, path: &Path) -> Result<String, String>;
     pub fn write_note(&self, path: &Path, content: &str) -> Result<(), String>;
-    pub fn save_document(&self, doc: &mut Document) -> Result<(), String>;
     // Reserved for future UI (список всех тегов)
     pub fn get_all_tags(&self) -> Vec<String>;
     pub fn get_dates_in_range(&self, from: NaiveDate, to: NaiveDate) -> Vec<(NaiveDate, Vec<DateEntry>)>;

@@ -25,6 +25,8 @@
 | MindMap | Граф связей (узлы=заметки, рёбра=ссылки) |
 | Индекс проекта | Персистентный, хранится в `.index/` в корне проекта заметок |
 | Редактор | 3 режима: source, preview, WYSIWYG (WYSIWYG в roadmap после MVP) |
+| Source редактор | `gpui::Editor` (из Zed) — Rope, undo/redo, selection, IME |
+| UI компоненты | gpui-component: Sidebar, TabBar, Button, Popover, Markdown, Theme |
 | MCP протокол | JSON-RPC 2.0 через stdio (стандартный MCP transport) |
 
 ---
@@ -111,7 +113,7 @@ struct ConcurrentIndex {
 impl Vault {
     pub fn open(path: &Path) -> Result<Self>;
     pub fn search(&self, query: &str) -> Result<Vec<SearchResult>>;
-    pub fn get_note(&self, path: &Path) -> Result<Note>;
+    pub fn open_buffer(&self, path: &Path) -> Result<Buffer>;
     pub fn write_note(&self, path: &Path, content: &str) -> Result<()>;
     pub fn get_all_tags(&self) -> Vec<&str>;
     pub fn get_all_dates(&self) -> Vec<DateEntry>;
@@ -211,14 +213,17 @@ pub struct AppState {
     pub vault: Arc<RwLock<Vault>>,
     pub open_tabs: Vec<OpenTab>,
     pub active_tab: usize,
-    pub editor_mode: EditorMode,  // Source | Preview
+    pub editor_mode: EditorMode,  // Source | Split | Preview
     pub sidebar_focus: SidebarFocus, // Tree | Search
+    pub lower_panel_visible: bool,
+    pub lower_panel_active_tab: LowerPanelTab,
 }
 
 pub struct OpenTab {
     pub path: PathBuf,
     pub title: String,
-    pub content_dirty: bool,
+    pub buffer: Arc<RwLock<Buffer>>,
+    pub editor: gpui::View<gpui::Editor>,
     pub editor_mode: EditorMode,
 }
 ```
@@ -341,17 +346,37 @@ simpler-notes-mcp --vault /path/to/notes
 ### Фаза 4: Полировка
 
 1. Настройки (тема, vault path)
-2. Quick Open (Cmd+P)
-3. Completion popups ([[ и #)
-4. Навигация по ссылкам
-5. WYSIWYG (опционально)
+2. Completion popups ([[ и #)
+3. Навигация по ссылкам
+4. WYSIWYG (опционально)
 
 ---
 
-## 6. Открытые вопросы (future)
+## 7. Зависимости от Zed
 
-- Поддержка вложений (картинки, схемы) рядом с .md файлом
+### Переиспользуется напрямую
+
+| Компонент | Крейт | Назначение |
+|-----------|-------|------------|
+| `gpui` | `gpui` | UI фреймворк: окна, event loop, рендеринг |
+| `gpui::Editor` | `gpui` | Полноценный редактор: Rope, undo/redo, selection, IME |
+
+### Не переиспользуется (слишком связаны с внутренностями Zed)
+
+- **`picker`** — Quick Open. Завязан на `workspace`, `ui`, `theme_settings` из Zed. Для MVP не нужен, для будущего — пишется на gpui-component + `nucleo`.
+- **`context_menu`** — не существует как отдельный крейт. Заменяется `Popover` из gpui-component.
+- **`project_panel`**, **`workspace`** — целиком. Пишутся с нуля под архитектуру Simpler Notes.
+
+### Из сторонних крейтов
+
+- **`gpui-component`** (longbridge/gpui-component) — Sidebar, TabBar, Button, Input, Popover, Icon, Tooltip, Markdown, Theme
+- **`nucleo`** (для MVP не требуется) — fuzzy matching для автокомплита. Добавляется при необходимости.
+
+---
+
+## 8. Future (не в MVP)
+
+- Quick Open (Cmd+P) — модальный поиск по всем .md файлам. Реализация: gpui-component + nuclei или кастомный picker.
+- WYSIWYG редактор
+- Поддержка вложений рядом с .md файлом
 - Self-hosted sync server (альтернатива git)
-- Расширяемый query language
-- Кастомные .vault с базой знаний
-- Динамическое сужение mindMap при поиске

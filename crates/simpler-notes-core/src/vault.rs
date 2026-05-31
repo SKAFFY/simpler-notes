@@ -214,7 +214,7 @@ mod tests {
 
         let vault = Vault::open(&dir).unwrap();
         vault
-            .write_note(Path::new("test.md"), "# Test\n\nThis is #test note")
+            .write_note(Path::new("test.md"), "# Test\n\nThis is @test note")
             .unwrap();
 
         let results = vault.search("tags contain \"test\"").unwrap();
@@ -232,10 +232,10 @@ mod tests {
 
         let vault = Vault::open(&dir).unwrap();
         vault
-            .write_note(Path::new("a.md"), "# A\n\n#project #todo")
+            .write_note(Path::new("a.md"), "# A\n\n@project @todo")
             .unwrap();
         vault
-            .write_note(Path::new("b.md"), "# B\n\n#project #done")
+            .write_note(Path::new("b.md"), "# B\n\n@project @done")
             .unwrap();
 
         let mut tags = vault.get_all_tags();

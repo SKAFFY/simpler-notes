@@ -30,12 +30,12 @@ impl Vault {
     /// Загружает персистентный индекс или строит новый в фоне.
     pub fn open(path: &Path) -> Result<Self, String>;
 
-    /// Открыть .md файл как Document (читает с диска в Rope).
+    /// Открыть .md файл как Buffer (читает с диска в String).
     /// Валидирует [[ссылки]]: если target не существует — добавляет в diagnostics BrokenLink.
-    pub fn open_document(&self, path: &Path) -> Result<Document, String>;
+    pub fn open_buffer(&self, path: &Path) -> Result<Buffer, String>;
 
-    /// Сохранить document на диск и переиндексировать.
-    pub fn save_document(&self, doc: &mut Document) -> Result<(), String>;
+    /// Сохранить buffer на диск и переиндексировать.
+    pub fn save_buffer(&self, buf: &mut Buffer) -> Result<(), String>;
 
     /// Поиск по query language.
     pub fn search(&self, query: &str) -> Result<Vec<SearchResult>, String>;
@@ -123,7 +123,7 @@ index.save(self.path);
 
 ### Инкрементальная (при сохранении файла)
 
-При `save_document()` вызывается `ConcurrentIndex::reindex_file()`:
+При `save_buffer()` вызывается `ConcurrentIndex::reindex_file()`:
 
 ```rust
 pub fn reindex_file(&self, path: &Path, content: &str) {
@@ -190,19 +190,18 @@ impl Vault {
 }
 ```
 
-## Сохранение документа
+## Сохранение buffer
 
 ```rust
 impl Vault {
-    pub fn save_document(&self, doc: &mut Document) -> Result<(), String> {
-        let path = doc.path.clone()
-            .ok_or_else(|| "Document has no path".to_string())?;
+    pub fn save_buffer(&self, buf: &mut Buffer) -> Result<(), String> {
+        let path = buf.path.clone()
+            .ok_or_else(|| "Buffer has no path".to_string())?;
 
-        doc.save()?;
+        buf.save()?;
 
         // Переиндексация
-        let content = doc.text.to_string();
-        self.index.reindex_file(&path, &content);
+        self.index.reindex_file(&path, &buf.text);
 
         // Сохранить индекс на диск
         self.index.save(&self.path)?;
@@ -218,23 +217,29 @@ impl Vault {
 
 | Триггер | Описание |
 |---------|----------|
-| Таймер | Каждый tick GUI проверяет `doc.should_autosave()` для всех dirty документов |
-| Потеря фокуса | При сворачивании окна — все dirty документы автосохраняются |
+| Таймер | Каждый tick GUI проверяет `buffer.is_dirty()` для всех dirty buffer'ов |
+| Потеря фокуса | При сворачивании окна — все dirty buffer'ы автосохраняются |
 
 ### Процесс
 
-1. GUI проверяет `doc.should_autosave()` (прошло >= `autosave_interval_secs` с последнего edit)
-2. Если пора — вызывает `vault.save_document(doc)`
-3. `save_document()` пишет файл на диск, переиндексирует, сохраняет индекс
+1. GUI проверяет `buffer.is_dirty()` для всех открытых buffer'ов
+2. Если buffer dirty — вызывает `vault.save_buffer(&mut buffer)`
+3. `save_buffer()` пишет файл на диск, переиндексирует, сохраняет индекс
 
 ## Жизненный цикл открытия файла
 
-1. `open_document(path)` → `Document::open(full_path)` → читает диск, парсит, кеширует метаданные
-2. GUI хранит `Document` в `OpenTab`, работает с ним через Rope
-3. При редактировании: `doc.apply_edit()` → `current_revision++`, `autosave_timer` сбрасывается
-4. При явном сохранении (Ctrl+S): `vault.save_document(doc)` → пишет диск + переиндексация
-5. При автосохранении: то же самое, что и явное сохранение
-6. Индекс на диске обновляется при каждом `save_document()`
+1. `vault.open_buffer(path)` → `Buffer` (core, читает файл с диска)
+2. GUI: `editor.set_text(buffer.text)`, сохраняет ссылку на `Arc<RwLock<Buffer>>`
+3. При редактировании: `buffer.current_revision++` (через gpui::Editor)
+4. При явном сохранении (Ctrl+S): `buffer.text = editor.text()`, `vault.save_buffer(&mut buffer)` → пишет диск + переиндексация
+5. При автосохранении: то же, что и явное сохранение
+6. Индекс на диске обновляется при каждом `save_buffer()`
+
+Для MCP (headless):
+1. `vault.open_buffer(path)` → `Buffer`
+2. Агент читает `buffer.text` целиком
+3. Агент пишет новый `buffer.text` целиком
+4. `vault.save_buffer(&mut buffer)`
 
 ## Автокомплит
 
@@ -265,8 +270,8 @@ pub struct SearchResult {
 
 - Все методы возвращают `Result<_, String>`
 - `open` — если путь не существует
-- `open_document` — если файл не найден или не читается
-- `save_document` — если у Document нет path
+- `open_buffer` — если файл не найден или не читается
+- `save_buffer` — если у Buffer нет path
 
 ## После MVP
 

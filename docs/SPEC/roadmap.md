@@ -13,9 +13,9 @@
 | Link index | core | P0 | Парсер |
 | Diagnostics | core | P0 | Парсер |
 | Index persistence | core | P0 | Tag Index, Date Index, Link Index |
-| Document | core | P0 | Note Model, Парсер |
+| Buffer | core | P0 | Note Model, Парсер |
 | Query language | core | P0 | — |
-| Vault | core | P0 | Парсер, Note Model, Document, Tag/Date/Link Index, Diagnostics, Index persistence, Query Language |
+| Vault | core | P0 | Парсер, Note Model, Buffer, Tag/Date/Link Index, Diagnostics, Index persistence, Query Language |
 
 ## Core Engine (P1)
 

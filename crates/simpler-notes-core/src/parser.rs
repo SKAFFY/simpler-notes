@@ -41,7 +41,7 @@ pub fn extract_links(content: &str) -> Vec<String> {
 }
 
 pub fn extract_tags(content: &str) -> Vec<String> {
-    let re = Regex::new(r"(?:^|\s)#([\w-]+)").unwrap();
+    let re = Regex::new(r"(?:^|\s)@([a-zA-Zа-яА-Я0-9_\-]+)").unwrap();
     let mut tags: Vec<String> = re
         .captures_iter(content)
         .map(|cap| cap[1].to_string())
@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn test_extract_tags() {
-        let content = "#project this is #todo and #project";
+        let content = "@project this is @todo and @project";
         let tags = extract_tags(content);
         assert_eq!(tags, vec!["project", "todo"]);
     }
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_extract_tags_no_duplicates() {
-        let content = "#tag1 #tag1 #tag2";
+        let content = "@tag1 @tag1 @tag2";
         let tags = extract_tags(content);
         assert_eq!(tags, vec!["tag1", "tag2"]);
     }
