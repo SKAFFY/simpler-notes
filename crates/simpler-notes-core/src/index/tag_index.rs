@@ -192,4 +192,25 @@ mod tests {
         index.clear();
         assert!(index.all_tags().is_empty());
     }
+
+    #[test]
+    fn test_remove_file() {
+        let index = TagIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), "project", ByteSpan { offset: 0, length: 8 });
+        index.add(path.clone(), "todo", ByteSpan { offset: 10, length: 5 });
+        index.add(PathBuf::from("other.md"), "project", ByteSpan { offset: 0, length: 8 });
+        index.remove_file(&path);
+        assert!(index.get("todo").is_empty());
+        assert_eq!(index.get("project").len(), 1);
+    }
+
+    #[test]
+    fn test_iter() {
+        let index = TagIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), "tag", ByteSpan { offset: 0, length: 4 });
+        let count: usize = index.iter().count();
+        assert_eq!(count, 1);
+    }
 }

@@ -184,4 +184,25 @@ mod tests {
         let mut buf = Buffer::new();
         assert!(buf.save(&PathBuf::from("nope.md")).is_none());
     }
+
+    #[test]
+    fn test_get_mut() {
+        let mut buf = Buffer::new();
+        buf.open(&PathBuf::from("test.md"), "hello".to_string());
+        let entry = buf.get_mut(&PathBuf::from("test.md")).unwrap();
+        entry.set_content("world".to_string());
+        assert!(entry.dirty);
+        assert_eq!(entry.content, "world");
+    }
+
+    #[test]
+    fn test_clear_buffer() {
+        let mut buf = Buffer::new();
+        buf.open(&PathBuf::from("a.md"), "a".to_string());
+        buf.open(&PathBuf::from("b.md"), "b".to_string());
+        assert!(!buf.is_empty());
+        buf.clear();
+        assert!(buf.is_empty());
+        assert_eq!(buf.len(), 0);
+    }
 }

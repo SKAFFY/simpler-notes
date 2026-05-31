@@ -145,4 +145,40 @@ mod tests {
         let result = ConcurrentIndex::load(dir.path());
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_load_wrong_version() {
+        let dir = TempDir::new().unwrap();
+        let index_dir = dir.path().join(".index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let meta = serde_json::json!({"version": 999, "last_rebuild": "now"});
+        std::fs::write(index_dir.join("metadata.json"), serde_json::to_string(&meta).unwrap()).unwrap();
+        std::fs::write(index_dir.join("tags.json"), "[]").unwrap();
+        std::fs::write(index_dir.join("dates.json"), "[]").unwrap();
+        std::fs::write(index_dir.join("links.json"), "[]").unwrap();
+        let result = ConcurrentIndex::load(dir.path());
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("999"));
+    }
+
+    #[test]
+    fn test_save_and_load_with_links() {
+        let dir = TempDir::new().unwrap();
+        let index = ConcurrentIndex::new();
+        let source = std::path::PathBuf::from("a.md");
+        let target = std::path::PathBuf::from("b.md");
+        let entry = LinkEntry {
+            source: source.clone(),
+            target: target.clone(),
+            label: "B".to_string(),
+            span: ByteSpan { offset: 0, length: 10 },
+        };
+        index.links.add(source.clone(), entry);
+
+        index.save(dir.path()).unwrap();
+        let loaded = ConcurrentIndex::load(dir.path()).unwrap();
+        let backlinks = loaded.links.backlinks(&target);
+        assert_eq!(backlinks.len(), 1);
+        assert_eq!(backlinks[0].source, source);
+    }
 }

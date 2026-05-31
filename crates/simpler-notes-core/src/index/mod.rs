@@ -90,9 +90,50 @@ impl ConcurrentIndex {
         self.diagnostics.remove(path);
         self.diagnostics.check_file(path, content, vault_path);
 
-        self.file_states.insert(path.to_path_buf(), FileIndexState {
+            self.file_states.insert(path.to_path_buf(), FileIndexState {
             tags: result.tags.iter().map(|t| t.name.clone()).collect(),
             dates: result.dates.iter().map(|d| d.date).collect(),
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clear_all() {
+        let index = ConcurrentIndex::new();
+        let path = PathBuf::from("test.md");
+        index.tags.add(path.clone(), "tag", ByteSpan { offset: 0, length: 4 });
+        index.dates.add(path.clone(), chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), ByteSpan { offset: 0, length: 12 });
+        let entry = LinkEntry {
+            source: path.clone(),
+            target: PathBuf::from("other.md"),
+            label: "other".to_string(),
+            span: ByteSpan { offset: 0, length: 10 },
+        };
+        index.links.add(path.clone(), entry);
+        index.diagnostics.check_file(&path, "[[]]", &PathBuf::from("."));
+        index.file_states.insert(path.clone(), FileIndexState { tags: vec!["tag".to_string()], dates: vec![] });
+        index.clear();
+        assert!(index.tags.all_tags().is_empty());
+        assert!(index.dates.all_dates().is_empty());
+        assert!(index.links.all_targets().is_empty());
+        assert!(index.diagnostics.all().is_empty());
+        assert!(index.file_states.is_empty());
+    }
+
+    #[test]
+    fn test_reindex_replaces_state() {
+        let index = ConcurrentIndex::new();
+        let path = PathBuf::from("test.md");
+        let content_a = "@tag1 !15.01.2024";
+        index.reindex_file(&path, content_a, &PathBuf::from("."));
+        assert!(index.tags.get("tag1").len() == 1);
+        let content_b = "@tag2";
+        index.reindex_file(&path, content_b, &PathBuf::from("."));
+        assert!(index.tags.get("tag1").is_empty(), "old tag should be removed");
+        assert!(index.tags.get("tag2").len() == 1, "new tag should be indexed");
     }
 }

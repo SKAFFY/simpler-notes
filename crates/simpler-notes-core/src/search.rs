@@ -241,4 +241,130 @@ mod tests {
         let expr = SearchEngine::parse_query("date:2024-01");
         assert_eq!(expr, QueryExpr::Date("2024-01".to_string()));
     }
+
+    #[test]
+    fn test_parse_empty_query() {
+        let expr = SearchEngine::parse_query("");
+        assert_eq!(expr, QueryExpr::Text(String::new()));
+    }
+
+    #[test]
+    fn test_parse_before_query() {
+        let expr = SearchEngine::parse_query("before:2024-01");
+        assert_eq!(expr, QueryExpr::Before("2024-01".to_string()));
+    }
+
+    #[test]
+    fn test_parse_after_query() {
+        let expr = SearchEngine::parse_query("after:2024-01");
+        assert_eq!(expr, QueryExpr::After("2024-01".to_string()));
+    }
+
+    #[test]
+    fn test_parse_content_query() {
+        let expr = SearchEngine::parse_query("content:hello");
+        assert_eq!(expr, QueryExpr::Content("hello".to_string()));
+    }
+
+    #[test]
+    fn test_parse_rg_line() {
+        let result = parse_rg_line("note.md:10:5:hello world").unwrap();
+        assert_eq!(result.path, "note.md");
+        assert_eq!(result.line, 10);
+        assert_eq!(result.column, 5);
+        assert_eq!(result.line_content, "hello world");
+    }
+
+    #[test]
+    fn test_parse_rg_line_malformed() {
+        assert!(parse_rg_line("note.md:10").is_none());
+    }
+
+    #[test]
+    fn test_execute_tag_query_found() {
+        let index = crate::index::ConcurrentIndex::new();
+        let path = std::path::PathBuf::from("test.md");
+        let span = crate::note_model::ByteSpan { offset: 0, length: 5 };
+        index.tags.add(path, "found", span);
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let results = engine.execute_query(&QueryExpr::Tag("found".to_string()), dir.path());
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_execute_and_query() {
+        let index = crate::index::ConcurrentIndex::new();
+        let path_a = std::path::PathBuf::from("a.md");
+        let path_b = std::path::PathBuf::from("b.md");
+        index.tags.add(path_a.clone(), "tag1", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        index.tags.add(path_a.clone(), "tag2", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        index.tags.add(path_b.clone(), "tag1", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let expr = QueryExpr::And(
+            Box::new(QueryExpr::Tag("tag1".to_string())),
+            Box::new(QueryExpr::Tag("tag2".to_string())),
+        );
+        let results = engine.execute_query(&expr, dir.path());
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_execute_or_query() {
+        let index = crate::index::ConcurrentIndex::new();
+        let path_a = std::path::PathBuf::from("a.md");
+        let path_b = std::path::PathBuf::from("b.md");
+        index.tags.add(path_a.clone(), "tag1", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        index.tags.add(path_b.clone(), "tag2", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let expr = QueryExpr::Or(
+            Box::new(QueryExpr::Tag("tag1".to_string())),
+            Box::new(QueryExpr::Tag("tag2".to_string())),
+        );
+        let results = engine.execute_query(&expr, dir.path());
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_execute_not_query() {
+        let index = crate::index::ConcurrentIndex::new();
+        let path_a = std::path::PathBuf::from("a.md");
+        let path_b = std::path::PathBuf::from("b.md");
+        index.tags.add(path_a.clone(), "tag1", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        index.tags.add(path_a.clone(), "tag2", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        index.tags.add(path_b.clone(), "tag1", crate::note_model::ByteSpan { offset: 0, length: 5 });
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let expr = QueryExpr::Not(Box::new(QueryExpr::Tag("tag2".to_string())));
+        let results = engine.execute_query(&expr, dir.path());
+        assert_eq!(results.len(), 1);
+        assert!(results[0].contains("b.md"));
+    }
+
+    #[test]
+    fn test_execute_date_query() {
+        let index = crate::index::ConcurrentIndex::new();
+        use chrono::NaiveDate;
+        let path = std::path::PathBuf::from("note.md");
+        index.dates.add(path.clone(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), crate::note_model::ByteSpan { offset: 0, length: 12 });
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let results = engine.execute_query(&QueryExpr::Date("2024".to_string()), dir.path());
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_all_indexed_files() {
+        let index = crate::index::ConcurrentIndex::new();
+        let path_a = std::path::PathBuf::from("a.md");
+        let path_b = std::path::PathBuf::from("b.md");
+        index.tags.add(path_a, "tag", crate::note_model::ByteSpan { offset: 0, length: 4 });
+        index.tags.add(path_b, "tag", crate::note_model::ByteSpan { offset: 0, length: 4 });
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let files = engine.all_indexed_files(dir.path());
+        assert_eq!(files.len(), 2);
+    }
 }

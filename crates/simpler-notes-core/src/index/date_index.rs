@@ -132,4 +132,27 @@ mod tests {
         index.clear();
         assert!(index.all_dates().is_empty());
     }
+
+    #[test]
+    fn test_remove_file() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.add(path.clone(), d(2024, 3, 20), ByteSpan { offset: 0, length: 12 });
+        index.add(PathBuf::from("other.md"), d(2024, 1, 15), ByteSpan { offset: 0, length: 10 });
+        index.remove_file(&path);
+        assert!(index.get(d(2024, 3, 20)).is_empty());
+        assert_eq!(index.get(d(2024, 1, 15)).len(), 1);
+    }
+
+    #[test]
+    fn test_add_multiple_spans() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 100, length: 5 });
+        let entries = index.get(d(2024, 1, 15));
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].spans.len(), 2);
+    }
 }
