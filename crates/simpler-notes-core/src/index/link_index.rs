@@ -58,6 +58,15 @@ impl LinkIndex {
         self.backward.clear();
     }
 
+    pub fn all_targets(&self) -> Vec<PathBuf> {
+        let mut targets: Vec<PathBuf> = self.backward.iter()
+            .map(|e| e.key().clone())
+            .collect();
+        targets.sort();
+        targets.dedup();
+        targets
+    }
+
     /// For serialization — iterate all entries
     pub fn iter(&self) -> dashmap::iter::Iter<'_, PathBuf, Vec<LinkEntry>> {
         self.backward.iter()

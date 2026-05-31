@@ -1,11 +1,14 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use parking_lot::RwLock;
 
 use crate::buffer::Buffer;
+use crate::diagnostics::Diagnostic;
 use crate::index::ConcurrentIndex;
+use crate::index::{DateEntry, LinkEntry, TagCompletion};
 use crate::search::SearchEngine;
 use crate::diagnostics::Diagnostics;
+use chrono::NaiveDate;
 
 pub struct VaultConfig {
     pub path: PathBuf,
@@ -157,6 +160,70 @@ impl Vault {
         }
         files
     }
+
+    pub fn read_note(&self, path: &Path) -> Result<String, String> {
+        let full_path = self.config.path.join(path);
+        std::fs::read_to_string(&full_path)
+            .map_err(|e| format!("Failed to read {:?}: {}", full_path, e))
+    }
+
+    pub fn write_note(&self, path: &Path, content: &str) -> Result<(), String> {
+        let full_path = self.config.path.join(path);
+        std::fs::write(&full_path, content)
+            .map_err(|e| format!("Failed to write {:?}: {}", full_path, e))?;
+        self.index.reindex_file(&full_path, content, &self.config.path);
+        self.index.save(&self.config.path)?;
+        Ok(())
+    }
+
+    pub fn get_all_tags(&self) -> Vec<String> {
+        self.index.tags.all_tags()
+    }
+
+    pub fn get_dates_in_range(&self, from: NaiveDate, to: NaiveDate) -> Vec<(NaiveDate, Vec<DateEntry>)> {
+        self.index.dates.get_range(from, to)
+    }
+
+    pub fn autocomplete_tags(&self, prefix: &str) -> Vec<TagCompletion> {
+        self.index.tags.autocomplete(prefix)
+    }
+
+    pub fn fuzzy_search_tags(&self, query: &str) -> Vec<TagCompletion> {
+        self.index.tags.fuzzy_search(query, usize::MAX)
+    }
+
+    pub fn autocomplete_links(&self, prefix: &str) -> Vec<String> {
+        let lower = prefix.to_lowercase();
+        self.index.links.all_targets().into_iter()
+            .filter(|t| t.to_string_lossy().to_lowercase().contains(&lower))
+            .map(|t| t.to_string_lossy().to_string())
+            .collect()
+    }
+
+    pub fn autocomplete_dates(&self, prefix: &str) -> Vec<String> {
+        let lower = prefix.to_lowercase();
+        self.index.dates.all_dates().into_iter()
+            .filter(|(d, _)| d.to_string().contains(&lower))
+            .map(|(d, _)| d.to_string())
+            .collect()
+    }
+
+    pub fn get_backlinks(&self, target: &Path) -> Vec<LinkEntry> {
+        self.index.links.backlinks(target)
+    }
+
+    pub fn get_outgoing_links(&self, source: &Path) -> Vec<LinkEntry> {
+        self.index.links.outgoing(source)
+    }
+
+    pub fn get_diagnostics(&self, path: &Path) -> Vec<Diagnostic> {
+        let full_path = self.config.path.join(path);
+        self.diagnostics().get(&full_path)
+    }
+
+    pub fn all_diagnostics(&self) -> Vec<(PathBuf, Vec<Diagnostic>)> {
+        self.diagnostics().all()
+    }
 }
 
 #[cfg(test)]
@@ -256,5 +323,45 @@ mod tests {
         };
         let vault = Vault::open(config).unwrap();
         assert!(vault.list_markdown_files().is_empty());
+    }
+
+    #[test]
+    fn test_read_write_note() {
+        let dir = TempDir::new().unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        vault.write_note(&PathBuf::from("test.md"), "hello @tag").unwrap();
+        let content = vault.read_note(&PathBuf::from("test.md")).unwrap();
+        assert_eq!(content, "hello @tag");
+        let tags = vault.get_all_tags();
+        assert!(tags.contains(&"tag".to_string()));
+    }
+
+    #[test]
+    fn test_autocomplete_tags() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "@project-alpha @project-beta @todo").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let results = vault.autocomplete_tags("proj");
+        assert!(results.iter().any(|c| c.name == "project-alpha"));
+    }
+
+    #[test]
+    fn test_get_diagnostics() {
+        let dir = TempDir::new().unwrap();
+        let path = PathBuf::from("note.md");
+        std::fs::write(dir.path().join(&path), "[[]]").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let diags = vault.get_diagnostics(&path);
+        assert!(!diags.is_empty());
+    }
+
+    #[test]
+    fn test_all_diagnostics() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "[[]]").unwrap();
+        std::fs::write(dir.path().join("b.md"), "clean").unwrap();
+        let vault = Vault::open(VaultConfig { path: dir.path().to_path_buf(), ..Default::default() }).unwrap();
+        let all = vault.all_diagnostics();
+        assert!(!all.is_empty());
     }
 }
