@@ -88,7 +88,8 @@ pub enum LowerPanelTab {
 pub struct OpenTab {
     pub path: PathBuf,
     pub title: String,
-    pub document: Arc<RwLock<Document>>,
+    pub buffer: Arc<RwLock<Buffer>>,
+    pub editor: gpui::View<gpui::Editor>,
 }
 ```
 
@@ -111,10 +112,10 @@ pub enum AutocompleteLocation {
 }
 ```
 
-- `document.text` — текущее содержимое (Rope), редактируется в Source
-- `document.cached_metadata` — кешированные метаданные для Preview
-- `document.is_dirty()` — флаг несохранённых изменений
-- `document.parse_and_update()` — вызывается при сохранении или при переключении на Preview
+- `buffer.text` — синхронизируется с gpui::Editor при открытии и сохранении
+- `buffer.is_dirty()` — флаг несохранённых изменений
+- Редактирование текста — через gpui::Editor напрямую
+- Парсинг для Preview: `parse_content(editor.text())` на момент переключения
 
 ## TitleBar
 

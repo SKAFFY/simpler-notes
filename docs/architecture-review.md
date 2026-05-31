@@ -111,7 +111,7 @@ struct ConcurrentIndex {
 impl Vault {
     pub fn open(path: &Path) -> Result<Self>;
     pub fn search(&self, query: &str) -> Result<Vec<SearchResult>>;
-    pub fn get_note(&self, path: &Path) -> Result<Note>;
+    pub fn open_buffer(&self, path: &Path) -> Result<Buffer>;
     pub fn write_note(&self, path: &Path, content: &str) -> Result<()>;
     pub fn get_all_tags(&self) -> Vec<&str>;
     pub fn get_all_dates(&self) -> Vec<DateEntry>;
@@ -211,14 +211,17 @@ pub struct AppState {
     pub vault: Arc<RwLock<Vault>>,
     pub open_tabs: Vec<OpenTab>,
     pub active_tab: usize,
-    pub editor_mode: EditorMode,  // Source | Preview
+    pub editor_mode: EditorMode,  // Source | Split | Preview
     pub sidebar_focus: SidebarFocus, // Tree | Search
+    pub lower_panel_visible: bool,
+    pub lower_panel_active_tab: LowerPanelTab,
 }
 
 pub struct OpenTab {
     pub path: PathBuf,
     pub title: String,
-    pub content_dirty: bool,
+    pub buffer: Arc<RwLock<Buffer>>,
+    pub editor: gpui::View<gpui::Editor>,
     pub editor_mode: EditorMode,
 }
 ```

@@ -10,64 +10,42 @@ depends: []
 
 Модели данных для заметок: позиции в тексте (Anchor), сущности (ссылки, теги, даты) и модель заметки.
 
-## Anchor — ссылка на позицию в тексте
+## ByteSpan — ссылка на позицию в тексте
+
+Парсер возвращает байтовые оффсеты. Они стабильны до следующего редактирования файла. GUI использует `gpui::Editor` для управления позициями курсора — Anchor не нужен.
 
 ```rust
-/// Ссылка на позицию в Document.text, устойчивая к вставкам/удалениям.
-/// При изменении текста до этой позиции offset автоматически корректируется.
-pub struct Anchor {
-    pub offset: usize,    // байт от начала документа
-    pub bias: Bias,       // поведение при вставке прямо на этой позиции
+/// Байтовая позиция в тексте.
+/// offset отсчитывается от начала файла.
+pub struct ByteSpan {
+    pub offset: usize,     // байт от начала файла
+    pub length: usize,     // длина в байтах
 }
-
-pub enum Bias {
-    Left,   // Anchor остаётся слева от нового текста
-    Right,  // Anchor сдвигается за новый текст
-}
-
-pub struct Span {
-    pub start: Anchor,
-    pub end: Anchor,
-}
-```
-
-### Как работает Bias
-
-Если пользователь вставляет текст на offset, где находится Anchor:
-
-- `Bias::Left` — Anchor остаётся на месте, новый текст вставляется после
-- `Bias::Right` — Anchor сдвигается за новый текст
-
-### Преобразование из байтового оффсета
-
-Парсер возвращает `Span { offset: usize, length: usize }`. Document конвертирует его в Anchored Span:
-
-```
-start = Anchor { offset, bias: Bias::Left }
-end = Anchor { offset + length, bias: Bias::Right }
 ```
 
 ## Сущности
 
+Все сущности используют байтовые оффсеты (`ByteSpan`), а не Anchor.
+
 ```rust
 /// [[вики-ссылка]]
 pub struct LinkRef {
-    pub file_name: String,  // имя заметки (без алиаса)
-    pub label: String,      // отображаемый текст (с алиасом или то же имя)
-    pub span: Span,         // позиция в Anchor
+    pub file_name: String,
+    pub label: String,
+    pub span: ByteSpan,
 }
 
 /// @тег
 pub struct TagRef {
-    pub name: String,       // название тега (без @)
-    pub span: Span,         // позиция в Anchor
+    pub name: String,
+    pub span: ByteSpan,
 }
 
 /// !дата
 pub struct DateRef {
-    pub date: NaiveDate,    // распарсенная дата
-    pub raw: String,        // исходная строка "!21.07.2003" (с префиксом !)
-    pub span: Span,         // позиция в Anchor
+    pub date: NaiveDate,
+    pub raw: String,
+    pub span: ByteSpan,
 }
 ```
 
@@ -99,4 +77,4 @@ pub struct NoteMetadata {
 
 ## Создание
 
-`Note` создаётся через `parser::parse_content(text)`. Полученные байтовые оффсеты затем конвертируются в Anchor через `Document::parse_and_update()`.
+`Note` создаётся через `parser::parse_content(text)`. Полученные байтовые оффсеты используются напрямую для индексации и diagnostics.
