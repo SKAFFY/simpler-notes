@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
 use crate::index::ConcurrentIndex;
 
 /// Parsed query expression (AST).
@@ -26,11 +27,11 @@ pub struct SearchResult {
 }
 
 pub struct SearchEngine {
-    pub index: ConcurrentIndex,
+    pub index: Arc<ConcurrentIndex>,
 }
 
 impl SearchEngine {
-    pub fn new(index: ConcurrentIndex) -> Self {
+    pub fn new(index: Arc<ConcurrentIndex>) -> Self {
         SearchEngine { index }
     }
 
@@ -185,6 +186,7 @@ fn parse_rg_line(line: &str) -> Option<SearchResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
     #[test]
@@ -217,9 +219,9 @@ mod tests {
 
     #[test]
     fn test_rg_not_available() {
-        let dir = TempDir::new().unwrap();
         let index = crate::index::ConcurrentIndex::new();
-        let engine = SearchEngine::new(index);
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
         let results = engine.search_fulltext(dir.path(), "test");
         // rg may not be installed; should handle gracefully
         assert!(results.is_empty() || !results.is_empty());
@@ -228,7 +230,7 @@ mod tests {
     #[test]
     fn test_execute_tag_query_empty() {
         let index = crate::index::ConcurrentIndex::new();
-        let engine = SearchEngine::new(index);
+        let engine = SearchEngine::new(Arc::new(index));
         let dir = TempDir::new().unwrap();
         let results = engine.execute_query(&QueryExpr::Tag("nonexistent".to_string()), dir.path());
         assert!(results.is_empty());
