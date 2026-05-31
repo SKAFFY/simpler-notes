@@ -4,7 +4,6 @@ use simpler_notes_core::vault::Vault;
 use crate::dispatcher::Tool;
 
 pub struct GetTagsTool {
-    #[allow(dead_code)]
     vault: Arc<Vault>,
 }
 
@@ -16,6 +15,11 @@ impl GetTagsTool {
 
 impl Tool for GetTagsTool {
     fn call(&self, _params: Option<Value>) -> Result<Value, (i32, String)> {
-        Ok(json!([]))
+        let tags = self.vault.get_all_tags();
+        let items: Vec<Value> = tags.into_iter().map(|tag| {
+            let count = self.vault.index.tags.get(&tag).len();
+            json!({"tag": tag, "count": count})
+        }).collect();
+        Ok(json!(items))
     }
 }

@@ -4,7 +4,6 @@ use simpler_notes_core::vault::Vault;
 use crate::dispatcher::Tool;
 
 pub struct ValidateIndexesTool {
-    #[allow(dead_code)]
     vault: Arc<Vault>,
 }
 
@@ -16,6 +15,11 @@ impl ValidateIndexesTool {
 
 impl Tool for ValidateIndexesTool {
     fn call(&self, _params: Option<Value>) -> Result<Value, (i32, String)> {
-        Ok(json!({}))
+        let report = self.vault.validate_indexes();
+        Ok(json!({
+            "total_notes": report.total_notes,
+            "total_tags": report.total_tags,
+            "total_dates": report.total_dates,
+        }))
     }
 }
