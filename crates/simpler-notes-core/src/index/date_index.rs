@@ -62,6 +62,17 @@ impl DateIndex {
         self.dates.clear();
     }
 
+    /// Remove all entries for a given file path.
+    pub fn remove_file(&self, path: &Path) {
+        let keys: Vec<NaiveDate> = self.dates.iter()
+            .filter(|e| e.value().iter().any(|entry| entry.path == path))
+            .map(|e| *e.key())
+            .collect();
+        for date in keys {
+            self.remove(path, date);
+        }
+    }
+
     /// For serialization — iterate all entries
     pub fn iter(&self) -> dashmap::iter::Iter<'_, NaiveDate, Vec<DateEntry>> {
         self.dates.iter()

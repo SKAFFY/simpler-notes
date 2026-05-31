@@ -88,6 +88,17 @@ impl TagIndex {
         self.tags.clear();
     }
 
+    /// Remove all entries for a given file path.
+    pub fn remove_file(&self, path: &Path) {
+        let keys: Vec<String> = self.tags.iter()
+            .filter(|e| e.value().iter().any(|entry| entry.path == path))
+            .map(|e| e.key().clone())
+            .collect();
+        for tag in keys {
+            self.remove(path, &tag);
+        }
+    }
+
     /// For serialization — iterate all entries
     pub fn iter(&self) -> dashmap::iter::Iter<'_, String, Vec<TagEntry>> {
         self.tags.iter()
