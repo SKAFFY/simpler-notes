@@ -1,8 +1,1 @@
-[
-  [
-    "world",
-    [
-      "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/written.md"
-    ]
-  ]
-]
+[["tag1",[{"path":"test-vault/note1.md","spans":[{"offset":35,"length":5},{"offset":35,"length":5},{"offset":35,"length":5},{"offset":35,"length":5},{"offset":35,"length":5}]},{"path":"test-vault/note3.md","spans":[{"offset":23,"length":5},{"offset":23,"length":5},{"offset":23,"length":5},{"offset":23,"length":5},{"offset":23,"length":5}]}]],["tag2",[{"path":"test-vault/note2.md","spans":[{"offset":29,"length":5},{"offset":29,"length":5},{"offset":29,"length":5},{"offset":29,"length":5},{"offset":29,"length":5}]},{"path":"test-vault/note3.md","spans":[{"offset":29,"length":5},{"offset":29,"length":5},{"offset":29,"length":5},{"offset":29,"length":5},{"offset":29,"length":5}]}]],["mcp-test",[{"path":"test-vault/mcp-test.md","spans":[{"offset":11,"length":9},{"offset":11,"length":9},{"offset":11,"length":9},{"offset":11,"length":9}]}]],["project",[{"path":"test-vault/project.md","spans":[{"offset":17,"length":8},{"offset":17,"length":8},{"offset":17,"length":8},{"offset":17,"length":8},{"offset":17,"length":8}]}]],["important",[{"path":"test-vault/note1.md","spans":[{"offset":41,"length":10},{"offset":41,"length":10},{"offset":41,"length":10},{"offset":41,"length":10},{"offset":41,"length":10}]}]]]
