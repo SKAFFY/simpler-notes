@@ -43,6 +43,22 @@ impl McpClient {
         }
     }
 
+    /// Send a notification (no id, no response expected).
+    fn send_notification(&mut self, method: &str, params: Option<Value>) {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        });
+
+        let body = serde_json::to_string(&request).unwrap();
+
+        let mut stdin = self.stdin.lock().unwrap();
+        write!(stdin, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+        stdin.flush().unwrap();
+        // No response read for notifications
+    }
+
     fn read_stderr(&mut self) -> String {
         let mut buf = String::new();
         self.stderr.read_to_string(&mut buf).ok();
@@ -208,12 +224,17 @@ fn test_get_tags() {
 }
 
 #[test]
-fn test_get_diagnostics() {
+fn test_notification_initialized_keeps_server_alive() {
     let (_dir, vault_path) = create_test_vault();
     let mut client = McpClient::spawn(vault_path.to_str().unwrap());
 
-    let resp = client.send_request("get_diagnostics", None);
-    assert!(resp.get("result").is_some(), "expected result, got: {:?}", resp);
+    // Send notification (no id) — no response expected
+    client.send_notification("notifications/initialized", None);
+
+    // Server should still be alive — make a follow-up call
+    let resp = client.send_request("ping", None);
+    let error = resp.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_i64());
+    assert_eq!(error, Some(-32601), "expected method not found after notification");
 }
 
 #[test]
@@ -465,3 +486,99 @@ fn test_resolve_link_ambiguous_returns_error() {
     assert!(error.is_some(), "expected error for ambiguous, got: {:?}", resp);
     assert!(error.unwrap().contains("Ambiguous link"));
 }
+
+#[test]
+fn test_mcp_initialize() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("initialize", Some(json!({"protocolVersion": "2024-11-05"})));
+    let result = resp.get("result").and_then(|r| r.as_object());
+    assert!(result.is_some(), "expected result, got: {:?}", resp);
+    let result = result.unwrap();
+    assert_eq!(result["protocolVersion"], "2024-11-05");
+    assert_eq!(result["serverInfo"]["name"], "simpler-notes-mcp");
+    assert!(result["capabilities"]["tools"].is_object());
+}
+
+#[test]
+fn test_mcp_tools_list() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("tools/list", None);
+    let tools = resp.get("result")
+        .and_then(|r| r.get("tools"))
+        .and_then(|t| t.as_array());
+    assert!(tools.is_some(), "expected tools array, got: {:?}", resp);
+    let tools = tools.unwrap();
+    assert!(tools.len() >= 11, "expected at least 11 tools, got {}", tools.len());
+
+    let names: Vec<&str> = tools.iter()
+        .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+        .collect();
+    assert!(names.contains(&"search_notes"), "should contain search_notes");
+    assert!(names.contains(&"read_note"));
+    assert!(names.contains(&"write_note"));
+    assert!(names.contains(&"list_notes"));
+    assert!(names.contains(&"get_tags"));
+    assert!(names.contains(&"get_dates"));
+    assert!(names.contains(&"get_backlinks"));
+    assert!(names.contains(&"get_outgoing_links"));
+    assert!(names.contains(&"resolve_link"));
+    assert!(names.contains(&"validate_indexes"));
+    assert!(names.contains(&"reindex"));
+    assert!(names.contains(&"get_diagnostics"));
+
+    // Every tool must have description and input_schema
+    for tool in tools {
+        assert!(tool.get("description").and_then(|d| d.as_str()).is_some(),
+            "tool {:?} missing description", tool.get("name"));
+        assert!(tool.get("input_schema").is_some(),
+            "tool {:?} missing input_schema", tool.get("name"));
+    }
+}
+
+#[test]
+fn test_mcp_tools_call_resolve_link() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("tools/call", Some(json!({
+        "name": "resolve_link",
+        "arguments": {"target": "beta"}
+    })));
+    let result = resp.get("result").and_then(|r| r.as_object());
+    assert!(result.is_some(), "expected result object, got: {:?}", resp);
+    let result = result.unwrap();
+    assert_eq!(result["isError"], false);
+    let content = result["content"].as_array().expect("expected content array");
+    assert_eq!(content[0]["type"], "text");
+    let text = content[0]["text"].as_str().unwrap();
+    assert!(text.contains("beta.md"), "text should mention beta.md, got: {}", text);
+}
+
+#[test]
+fn test_mcp_tools_call_unknown_tool() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("tools/call", Some(json!({
+        "name": "ghost_tool"
+    })));
+    let result = resp.get("result").and_then(|r| r.as_object());
+    assert!(result.is_some(), "expected result, got: {:?}", resp);
+    assert_eq!(result.unwrap()["isError"], true);
+}
+
+#[test]
+fn test_mcp_tools_call_missing_name() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("tools/call", Some(json!({})));
+    let error = resp.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_i64());
+    assert_eq!(error, Some(-32602), "expected invalid params error, got: {:?}", resp);
+}
+
+

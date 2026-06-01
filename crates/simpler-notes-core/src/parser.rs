@@ -1,3 +1,4 @@
+use std::ops::Range;
 use regex::Regex;
 use chrono::NaiveDate;
 use crate::note_model::ByteSpan;
@@ -45,13 +46,19 @@ pub struct ParseResult {
 
 /// Parse markdown content extracting [[wiki-links]], @tags, and !dates.
 ///
-/// Currently uses three separate regex passes.
-/// Future: single-pass parser for performance.
+/// Tags and dates inside MD constructs (code blocks, links, comments, etc.)
+/// are masked — they are not extracted.
 pub fn parse_content(text: &str) -> ParseResult {
     let mut errors = Vec::new();
     let links = parse_links(text, &mut errors);
-    let tags = parse_tags(text);
-    let dates = parse_dates(text, &mut errors);
+
+    let wiki_spans: Vec<Range<usize>> = links.iter()
+        .map(|l| l.span.offset..(l.span.offset + l.span.length))
+        .collect();
+    let masked_ranges = build_masked_ranges(text, &wiki_spans);
+
+    let tags = parse_tags(text, &masked_ranges);
+    let dates = parse_dates(text, &masked_ranges, &mut errors);
     ParseResult { links, tags, dates, errors }
 }
 
@@ -83,28 +90,135 @@ fn parse_links(text: &str, errors: &mut Vec<ParseError>) -> Vec<LinkSpan> {
     links
 }
 
-fn parse_tags(text: &str) -> Vec<TagSpan> {
+fn is_fence_line(line: &str, fc: char, min_count: usize) -> bool {
+    let count = line.trim().chars().take_while(|&c| c == fc).count();
+    if count < min_count {
+        return false;
+    }
+    line.trim()[count..].trim().is_empty()
+}
+
+fn find_closing_fence(lines: &[&str], start: usize, fc: char, fence_len: usize) -> usize {
+    let mut j = start + 1;
+    while j < lines.len() {
+        if is_fence_line(lines[j], fc, fence_len) {
+            return j;
+        }
+        j += 1;
+    }
+    lines.len()
+}
+
+fn build_masked_ranges(text: &str, extra_ranges: &[Range<usize>]) -> Vec<Range<usize>> {
+    let mut ranges: Vec<Range<usize>> = Vec::new();
+
+    // Fenced code blocks ```...``` and ~~~...~~~
+    // Manual scan — regex crate doesn't support backreferences.
+    let lines: Vec<&str> = text.lines().collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let trimmed = lines[i].trim();
+        let fence_info = if trimmed.starts_with("```") {
+            Some((trimmed.chars().take_while(|&c| c == '`').count(), '`'))
+        } else if trimmed.starts_with("~~~") {
+            Some((trimmed.chars().take_while(|&c| c == '~').count(), '~'))
+        } else {
+            None
+        };
+
+        if let Some((flen, fc)) = fence_info {
+            let line_start = lines[..i].iter().map(|l| l.len() + 1).sum::<usize>();
+            let end_idx = find_closing_fence(&lines, i, fc, flen);
+            let end_line = if end_idx < lines.len() { end_idx + 1 } else { lines.len() };
+            let block_end = lines[..end_line].iter().map(|l| l.len() + 1).sum::<usize>();
+            // subtract 1 for the trailing newline counted above if text doesn't end with \n
+            let block_len = block_end.saturating_sub(line_start).saturating_sub(1).max(1);
+            ranges.push(line_start..(line_start + block_len));
+            i = end_line;
+            continue;
+        }
+        i += 1;
+    }
+
+    // HTML comments <!-- ... -->
+    let comment_re = Regex::new(r"<!--.*?-->").unwrap();
+    for m in comment_re.find_iter(text) {
+        ranges.push(m.start()..m.end());
+    }
+
+    // Inline code `...` (single backtick pairs)
+    let inline_re = Regex::new(r"`([^`]*)`").unwrap();
+    for m in inline_re.find_iter(text) {
+        ranges.push(m.start()..m.end());
+    }
+
+    // MD links [...](...) and images ![alt](...)
+    let md_link_re = Regex::new(r"!?\[([^\[\]]*)\]\([^)]*\)").unwrap();
+    for m in md_link_re.find_iter(text) {
+        ranges.push(m.start()..m.end());
+    }
+
+    ranges.extend_from_slice(extra_ranges);
+
+    // Sort and merge overlapping ranges
+    ranges.sort_by_key(|r| r.start);
+    let mut merged: Vec<Range<usize>> = Vec::new();
+    for r in ranges {
+        if let Some(last) = merged.last_mut() {
+            if r.start <= last.end {
+                last.end = last.end.max(r.end);
+                continue;
+            }
+        }
+        merged.push(r);
+    }
+
+    merged
+}
+
+fn is_masked(offset: usize, masked_ranges: &[Range<usize>]) -> bool {
+    masked_ranges.binary_search_by(|r| {
+        if offset < r.start {
+            std::cmp::Ordering::Less
+        } else if offset >= r.end {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    }).is_ok()
+}
+
+fn parse_tags(text: &str, masked_ranges: &[Range<usize>]) -> Vec<TagSpan> {
     let re = Regex::new(r"(?m:^|\s)@([a-zA-Zа-яА-Я0-9_\-]+)").unwrap();
     let mut tags = Vec::new();
 
     for cap in re.captures_iter(text) {
-        let name = cap.get(1).unwrap().as_str().to_string();
         let m = cap.get(0).unwrap();
         let leading_len = m.as_str().chars().take_while(|&c| c == ' ' || c == '\n').count();
         let offset = m.start() + leading_len;
-        let length = name.len() + 1;
 
+        if is_masked(offset, masked_ranges) {
+            continue;
+        }
+
+        let name = cap.get(1).unwrap().as_str().to_string();
+        let length = name.len() + 1;
         tags.push(TagSpan { name, span: ByteSpan { offset, length } });
     }
     tags
 }
 
-fn parse_dates(text: &str, errors: &mut Vec<ParseError>) -> Vec<DateSpan> {
+fn parse_dates(text: &str, masked_ranges: &[Range<usize>], errors: &mut Vec<ParseError>) -> Vec<DateSpan> {
     let re = Regex::new(r"(?m:^|\s)!(\d{2})\.(\d{2})\.(\d{4})\b").unwrap();
     let mut dates = Vec::new();
 
     for cap in re.captures_iter(text) {
         let m = cap.get(0).unwrap();
+
+        if is_masked(m.start(), masked_ranges) {
+            continue;
+        }
+
         let span = ByteSpan { offset: m.start(), length: m.end() - m.start() };
         let raw = format!("!{}.{}.{}", &cap[1], &cap[2], &cap[3]);
         let day: u32 = cap[1].parse().unwrap();
@@ -303,5 +417,124 @@ mod tests {
             let names: Vec<&str> = result.tags.iter().map(|t| t.name.as_str()).collect();
             assert_eq!(names, case.expected_tags, "case {}: tags mismatch", i);
         }
+    }
+
+    #[test]
+    fn test_tag_masked_in_wiki_link() {
+        let result = parse_content("[[note @tag]]");
+        assert!(result.tags.is_empty(), "tag inside [[...]] should be masked");
+        assert_eq!(result.links.len(), 1);
+    }
+
+    #[test]
+    fn test_tag_masked_in_wiki_link_with_alias() {
+        let result = parse_content("[[note @tag|label]]");
+        assert!(result.tags.is_empty(), "tag in wiki-link target should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_wiki_link_alias_part() {
+        let result = parse_content("[[note|label @tag]]");
+        assert!(result.tags.is_empty(), "tag in wiki-link alias should be masked");
+    }
+
+    #[test]
+    fn test_date_masked_in_wiki_link() {
+        let result = parse_content("[[note !01.01.2024]]");
+        assert!(result.dates.is_empty(), "date inside [[...]] should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_md_link() {
+        let result = parse_content("[link @tag](url)");
+        assert!(result.tags.is_empty(), "tag inside [...] should be masked");
+    }
+
+    #[test]
+    fn test_date_masked_in_md_link() {
+        let result = parse_content("[link !01.01.2024](url)");
+        assert!(result.dates.is_empty(), "date inside [...] should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_image() {
+        let result = parse_content("![alt @tag](image.png)");
+        assert!(result.tags.is_empty(), "tag inside ![alt] should be masked");
+    }
+
+    #[test]
+    fn test_date_masked_in_image() {
+        let result = parse_content("![alt !01.01.2024](image.png)");
+        assert!(result.dates.is_empty(), "date inside ![alt] should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_inline_code() {
+        let result = parse_content("`code @tag`");
+        assert!(result.tags.is_empty(), "tag inside `code` should be masked");
+    }
+
+    #[test]
+    fn test_date_masked_in_inline_code() {
+        let result = parse_content("`code !01.01.2024`");
+        assert!(result.dates.is_empty(), "date inside `code` should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_fenced_code() {
+        let result = parse_content("```\n@tag inside\n```");
+        assert!(result.tags.is_empty(), "tag inside fenced code should be masked");
+    }
+
+    #[test]
+    fn test_date_masked_in_fenced_code() {
+        let result = parse_content("```\n!01.01.2024 inside\n```");
+        assert!(result.dates.is_empty(), "date inside fenced code should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_tilde_fenced_code() {
+        let result = parse_content("~~~\n@tag inside\n~~~");
+        assert!(result.tags.is_empty(), "tag inside ~~~ fenced code should be masked");
+    }
+
+    #[test]
+    fn test_tag_masked_in_html_comment() {
+        let result = parse_content("<!-- @tag -->");
+        assert!(result.tags.is_empty(), "tag inside <!-- --> should be masked");
+    }
+
+    #[test]
+    fn test_date_masked_in_html_comment() {
+        let result = parse_content("<!-- !01.01.2024 -->");
+        assert!(result.dates.is_empty(), "date inside <!-- --> should be masked");
+    }
+
+    #[test]
+    fn test_tag_in_plain_text_still_works() {
+        let result = parse_content("plain @tag");
+        assert_eq!(result.tags.len(), 1, "tag in plain text should still be extracted");
+        assert_eq!(result.tags[0].name, "tag");
+    }
+
+    #[test]
+    fn test_date_in_plain_text_still_works() {
+        let result = parse_content("plain !01.01.2024");
+        assert_eq!(result.dates.len(), 1, "date in plain text should still be extracted");
+        assert_eq!(result.dates[0].raw, "!01.01.2024");
+    }
+
+    #[test]
+    fn test_tags_outside_fenced_code_work() {
+        let result = parse_content("```\n@tag inside\n```\n\n@outside");
+        assert_eq!(result.tags.len(), 1, "only tag outside fenced code should be extracted");
+        assert_eq!(result.tags[0].name, "outside");
+    }
+
+    #[test]
+    fn test_dates_outside_fenced_code_work() {
+        let result = parse_content("```\n!01.01.2024\n```\n\n!02.02.2024");
+        assert_eq!(result.dates.len(), 1, "only date outside fenced code should be extracted");
+        assert_eq!(result.dates[0].raw, "!02.02.2024");
     }
 }

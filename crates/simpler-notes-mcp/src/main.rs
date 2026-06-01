@@ -7,7 +7,7 @@ use std::env;
 use std::sync::Arc;
 use simpler_notes_core::vault::{Vault, VaultConfig};
 use crate::transport::McpTransport;
-use crate::types::{JsonRpcRequest, JsonRpcResponse};
+use crate::types::JsonRpcRequest;
 use crate::dispatcher::Dispatcher;
 
 fn main() {
@@ -47,18 +47,17 @@ fn main() {
             }
         };
 
-        let response = match dispatcher.dispatch(&request.method, request.params) {
-            Ok(result) => JsonRpcResponse::success(request.id, result),
-            Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
-        };
+        let response = dispatcher.handle_jsonrpc(request);
 
-        let response_body = serde_json::to_string(&response).unwrap_or_else(|e| {
-            eprintln!("Serialization error: {}", e);
-            String::from("{}")
-        });
-        if let Err(e) = McpTransport::write_message(&response_body) {
-            eprintln!("Write error: {}", e);
-            break;
+        if let Some(resp) = response {
+            let response_body = serde_json::to_string(&resp).unwrap_or_else(|e| {
+                eprintln!("Serialization error: {}", e);
+                String::from("{}")
+            });
+            if let Err(e) = McpTransport::write_message(&response_body) {
+                eprintln!("Write error: {}", e);
+                break;
+            }
         }
     }
 }
