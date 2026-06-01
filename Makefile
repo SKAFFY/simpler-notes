@@ -1,19 +1,20 @@
 UNAME_S := $(shell uname -s)
 
-.PHONY: all build build-git build-all build-gui run-gui test test-git test-all \
-        test-vault test-watcher test-verbose fmt fmt-check lint clean doc doc-open
+.PHONY: all build build-mcp build-git build-all build-gui run-gui \
+        test test-mcp test-e2e test-git test-all test-vault test-watcher test-verbose \
+        coverage fmt fmt-check lint clean doc doc-open
 
-all: build test
+all: build-mcp test-all
 
 # Build
 build:
 	cargo build -p simpler-notes-core
 
-build-git:
-	cargo build -p simpler-notes-core --features git
+build-mcp:
+	cargo build -p simpler-notes-mcp
 
 build-all:
-	cargo build --workspace
+	cargo build -p simpler-notes-core -p simpler-notes-mcp
 
 # GUI
 build-gui:
@@ -34,11 +35,17 @@ endif
 test:
 	cargo test -p simpler-notes-core
 
+test-mcp:
+	cargo test -p simpler-notes-mcp
+
+test-e2e:
+	cargo test -p simpler-notes-mcp --test e2e
+
 test-git:
 	cargo test -p simpler-notes-core --features git
 
 test-all:
-	cargo test --workspace
+	cargo test -p simpler-notes-core -p simpler-notes-mcp
 
 test-vault:
 	cargo test -p simpler-notes-core vault
@@ -49,6 +56,10 @@ test-watcher:
 # Run specific tests with output
 test-verbose:
 	cargo test -p simpler-notes-core -- --nocapture
+
+# Coverage
+coverage:
+	cargo tarpaulin -p simpler-notes-core -p simpler-notes-mcp --out Stdout
 
 # Format
 fmt:
