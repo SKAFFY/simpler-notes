@@ -14,6 +14,12 @@ pub struct DateIndex {
     dates: DashMap<NaiveDate, Vec<DateEntry>>,
 }
 
+impl Default for DateIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DateIndex {
     pub fn new() -> Self {
         DateIndex { dates: DashMap::new() }
@@ -46,7 +52,7 @@ impl DateIndex {
             .filter(|e| *e.key() >= from && *e.key() <= to)
             .map(|e| (*e.key(), e.value().clone()))
             .collect();
-        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result.sort_by_key(|a| a.0);
         result
     }
 
@@ -54,7 +60,7 @@ impl DateIndex {
         let mut result: Vec<_> = self.dates.iter()
             .map(|e| (*e.key(), e.value().clone()))
             .collect();
-        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result.sort_by_key(|a| a.0);
         result
     }
 

@@ -59,6 +59,27 @@ impl Watcher {
         });
     }
 
+    /// Build a full filename_index by scanning vault for all .md files.
+    fn build_filename_index(vault_path: &Path) -> HashMap<String, Vec<PathBuf>> {
+        let mut map: HashMap<String, Vec<PathBuf>> = HashMap::new();
+        for entry in walkdir::WalkDir::new(vault_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            if let Some(stem) = path.file_stem() {
+                map.entry(stem.to_string_lossy().to_string())
+                    .or_default()
+                    .push(path.to_path_buf());
+            }
+        }
+        map
+    }
+
     fn handle_event(
         event: &Event,
         vault_path: &Path,
@@ -76,19 +97,15 @@ impl Watcher {
             match event.kind {
                 EventKind::Create(_) | EventKind::Modify(_) => {
                     if let Ok(content) = std::fs::read_to_string(path) {
-                        // Update buffer if file is open
+                        // Update buffer if file is open — don't mark dirty
                         let mut buf = buffer.write();
-                        if buf.get(path).is_some() {
-                            buf.update(path, content.clone());
+                        if let Some(entry) = buf.get_mut(path) {
+                            entry.content = content.clone();
+                            entry.dirty = false;
                         }
 
-                        // Build filename index for diagnostics
-                        let mut filename_index: HashMap<String, Vec<PathBuf>> = HashMap::new();
-                        if let Some(stem) = path.file_stem() {
-                            filename_index.entry(stem.to_string_lossy().to_string())
-                                .or_default()
-                                .push(path.to_path_buf());
-                        }
+                        // Build full filename index for correct diagnostics
+                        let filename_index = Self::build_filename_index(vault_path);
 
                         // Reindex
                         index.reindex_file(path, &content, vault_path, &filename_index);

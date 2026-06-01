@@ -50,6 +50,7 @@ simpler-notes-mcp --vault /path/to/notes [--git]
 | `get_dates` | `from?: string, to?: string` | Все даты или в диапазоне |
 | `get_backlinks` | `path: string` | Какие файлы ссылаются на path |
 | `get_outgoing_links` | `path: string` | Куда ссылается path |
+| `resolve_link` | `target: string` | Разрешить плоское имя ссылки в полный путь к файлу |
 | `git_push` | — | Stage, commit (если dirty), squash (если >1 unpushed), pull rebase, push |
 | `git_pull` | — | Pull из remote |
 | `validate_indexes` | — | Проверка целостности |

@@ -19,6 +19,12 @@ pub struct TagIndex {
     tags: DashMap<String, Vec<TagEntry>>,
 }
 
+impl Default for TagIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TagIndex {
     pub fn new() -> Self {
         TagIndex { tags: DashMap::new() }

@@ -211,6 +211,30 @@ Pull из remote.
 
 `target` — плоское имя файла (file_stem) без расширения и без пути.
 
+### `resolve_link`
+
+Разрешить плоское имя ссылки (file_stem) в полный путь к файлу на диске.
+
+**Arguments:**
+```json
+{"target": "beta"}
+```
+
+**Result (success):**
+```json
+{"path": "/vault/notes/beta.md"}
+```
+
+**Result (broken link):**
+```json
+{"error": {"code": -32000, "message": "Broken link: ghost — file not found"}}
+```
+
+**Result (ambiguous link):**
+```json
+{"error": {"code": -32000, "message": "Ambiguous link: note — multiple files: /vault/note.md, /vault/sub/note.md"}}
+```
+
 ### `get_outgoing_links`
 
 На какие файлы ссылается указанная заметка.

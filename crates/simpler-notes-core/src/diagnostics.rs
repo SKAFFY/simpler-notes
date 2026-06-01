@@ -22,6 +22,12 @@ pub struct Diagnostics {
     file_diagnostics: DashMap<PathBuf, Vec<Diagnostic>>,
 }
 
+impl Default for Diagnostics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Diagnostics {
     pub fn new() -> Self {
         Diagnostics { file_diagnostics: DashMap::new() }
