@@ -1,3 +1,0 @@
-# Written
-
-Hello @world

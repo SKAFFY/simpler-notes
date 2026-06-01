@@ -1,8 +1,141 @@
 [
   [
-    "world",
+    "tag2",
     [
-      "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/written.md"
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
+        "spans": [
+          {
+            "offset": 29,
+            "length": 5
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 29,
+            "length": 5
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "archive",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/archive/old.md",
+        "spans": [
+          {
+            "offset": 17,
+            "length": 8
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "important",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 41,
+            "length": 10
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "tag1",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 35,
+            "length": 5
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/archive/old.md",
+        "spans": [
+          {
+            "offset": 26,
+            "length": 5
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 23,
+            "length": 5
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "mcp-test",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/mcp-test.md",
+        "spans": [
+          {
+            "offset": 11,
+            "length": 9
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "subtag",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/subnote.md",
+        "spans": [
+          {
+            "offset": 12,
+            "length": 7
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "links-demo",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
+        "spans": [
+          {
+            "offset": 19,
+            "length": 11
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "project",
+    [
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/project.md",
+        "spans": [
+          {
+            "offset": 17,
+            "length": 8
+          }
+        ]
+      }
     ]
   ]
 ]

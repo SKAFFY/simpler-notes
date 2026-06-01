@@ -1,75 +1,158 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use chrono::NaiveDate;
 use dashmap::DashMap;
-#[derive(Debug, Default)]
+use serde::{Deserialize, Serialize};
+use crate::note_model::ByteSpan;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DateEntry {
+    pub path: PathBuf,
+    pub spans: Vec<ByteSpan>,
+}
+
 pub struct DateIndex {
-    dates: DashMap<NaiveDate, Vec<PathBuf>>,
+    dates: DashMap<NaiveDate, Vec<DateEntry>>,
 }
 
 impl DateIndex {
     pub fn new() -> Self {
-        Self::default()
+        DateIndex { dates: DashMap::new() }
     }
 
-    pub fn add(&self, date: NaiveDate, path: PathBuf) {
-        self.dates.entry(date)
-            .or_insert_with(Vec::new)
-            .push(path);
+    pub fn add(&self, path: PathBuf, date: NaiveDate, span: ByteSpan) {
+        let mut entries = self.dates.entry(date).or_default();
+        match entries.iter_mut().find(|e| e.path == path) {
+            Some(e) => e.spans.push(span),
+            None => entries.push(DateEntry { path, spans: vec![span] }),
+        }
     }
 
-    pub fn get(&self, date: NaiveDate) -> Vec<PathBuf> {
-        self.dates.get(&date)
-            .map(|v| v.clone())
-            .unwrap_or_default()
+    pub fn remove(&self, path: &Path, date: NaiveDate) {
+        if let Some(mut entries) = self.dates.get_mut(&date) {
+            entries.retain(|e| e.path != path);
+            if entries.is_empty() {
+                drop(entries);
+                self.dates.remove(&date);
+            }
+        }
     }
 
-    pub fn all_dates(&self) -> Vec<(NaiveDate, Vec<PathBuf>)> {
-        self.dates.iter()
+    pub fn get(&self, date: NaiveDate) -> Vec<DateEntry> {
+        self.dates.get(&date).map(|e| e.value().clone()).unwrap_or_default()
+    }
+
+    pub fn get_range(&self, from: NaiveDate, to: NaiveDate) -> Vec<(NaiveDate, Vec<DateEntry>)> {
+        let mut result: Vec<_> = self.dates.iter()
+            .filter(|e| *e.key() >= from && *e.key() <= to)
             .map(|e| (*e.key(), e.value().clone()))
-            .collect()
+            .collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+
+    pub fn all_dates(&self) -> Vec<(NaiveDate, Vec<DateEntry>)> {
+        let mut result: Vec<_> = self.dates.iter()
+            .map(|e| (*e.key(), e.value().clone()))
+            .collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
     }
 
     pub fn clear(&self) {
         self.dates.clear();
+    }
+
+    /// Remove all entries for a given file path.
+    pub fn remove_file(&self, path: &Path) {
+        let keys: Vec<NaiveDate> = self.dates.iter()
+            .filter(|e| e.value().iter().any(|entry| entry.path == path))
+            .map(|e| *e.key())
+            .collect();
+        for date in keys {
+            self.remove(path, date);
+        }
+    }
+
+    /// For serialization — iterate all entries
+    pub fn iter(&self) -> dashmap::iter::Iter<'_, NaiveDate, Vec<DateEntry>> {
+        self.dates.iter()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
 
-    #[test]
-    fn test_date_add_and_get() {
-        let idx = DateIndex::new();
-        let d1 = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        let d2 = NaiveDate::from_ymd_opt(2024, 6, 1).unwrap();
-
-        idx.add(d1, PathBuf::from("a.md"));
-        idx.add(d1, PathBuf::from("b.md"));
-        idx.add(d2, PathBuf::from("c.md"));
-
-        assert_eq!(idx.get(d1).len(), 2);
-        assert_eq!(idx.get(d2).len(), 1);
-        assert!(idx.get(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()).is_empty());
+    fn d(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
     }
 
     #[test]
-    fn test_date_all_dates() {
-        let idx = DateIndex::new();
-        let d1 = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        idx.add(d1, PathBuf::from("a.md"));
-
-        let all = idx.all_dates();
-        assert_eq!(all.len(), 1);
-        assert_eq!(all[0].0, d1);
+    fn test_add_and_get() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        let entries = index.get(d(2024, 1, 15));
+        assert_eq!(entries.len(), 1);
     }
 
     #[test]
-    fn test_date_clear() {
-        let idx = DateIndex::new();
-        idx.add(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(), PathBuf::from("a.md"));
-        idx.clear();
-        assert!(idx.all_dates().is_empty());
+    fn test_get_range() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.add(path.clone(), d(2024, 3, 20), ByteSpan { offset: 0, length: 12 });
+        let range = index.get_range(d(2024, 1, 1), d(2024, 2, 1));
+        assert_eq!(range.len(), 1);
+        assert_eq!(range[0].0, d(2024, 1, 15));
+    }
+
+    #[test]
+    fn test_remove() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.remove(&path, d(2024, 1, 15));
+        assert!(index.get(d(2024, 1, 15)).is_empty());
+    }
+
+    #[test]
+    fn test_all_dates() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.add(path.clone(), d(2024, 3, 20), ByteSpan { offset: 0, length: 12 });
+        assert_eq!(index.all_dates().len(), 2);
+    }
+
+    #[test]
+    fn test_clear() {
+        let index = DateIndex::new();
+        index.add(PathBuf::from("note.md"), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.clear();
+        assert!(index.all_dates().is_empty());
+    }
+
+    #[test]
+    fn test_remove_file() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.add(path.clone(), d(2024, 3, 20), ByteSpan { offset: 0, length: 12 });
+        index.add(PathBuf::from("other.md"), d(2024, 1, 15), ByteSpan { offset: 0, length: 10 });
+        index.remove_file(&path);
+        assert!(index.get(d(2024, 3, 20)).is_empty());
+        assert_eq!(index.get(d(2024, 1, 15)).len(), 1);
+    }
+
+    #[test]
+    fn test_add_multiple_spans() {
+        let index = DateIndex::new();
+        let path = PathBuf::from("note.md");
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 0, length: 12 });
+        index.add(path.clone(), d(2024, 1, 15), ByteSpan { offset: 100, length: 5 });
+        let entries = index.get(d(2024, 1, 15));
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].spans.len(), 2);
     }
 }

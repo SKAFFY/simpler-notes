@@ -23,13 +23,13 @@ pub struct LinkIndex {
 
 pub struct LinkEntry {
     pub source: PathBuf,     // откуда ссылка
-    pub target: PathBuf,     // куда ссылка (имя файла без .md)
+    pub target: PathBuf,     // куда ссылка (только имя файла, file_stem, без расширения и без пути)
     pub label: String,       // отображаемый текст
     pub span: ByteSpan,      // позиция в исходном файле
 }
 ```
 
-Ключ: **target** — файл, на который ссылаются (PathBuf).
+Ключ: **target** — имя файла (file_stem без расширения), на который ссылаются (PathBuf).
 Значение: список `LinkEntry` — все файлы, которые ссылаются на target + их позиции.
 
 Forward-связи (source → target) не хранятся в индексе — их можно получить через `parse_content()` для каждого открытого файла при необходимости.
@@ -66,7 +66,19 @@ index.links.remove_file(path);
 
 // 2. Добавить новые
 for link_span in parse_result.links {
-    let target = PathBuf::from(&link_span.file_name);
+    let raw_target = PathBuf::from(&link_span.file_name);
+    let resolved = if raw_target.is_absolute() {
+        raw_target
+    } else {
+        path.parent().unwrap_or(Path::new("")).join(&raw_target)
+    };
+    let normalized = normalize_path(&resolved);
+    let file_stem = normalized
+        .file_stem()
+        .unwrap_or(normalized.as_os_str())
+        .to_string_lossy()
+        .to_string();
+    let target = PathBuf::from(file_stem);
     let entry = LinkEntry {
         source: path.to_path_buf(),
         target: target.clone(),
@@ -76,6 +88,8 @@ for link_span in parse_result.links {
     index.links.add(path.to_path_buf(), entry);
 }
 ```
+
+`target` всегда сохраняется как плоское имя файла (file_stem) без расширения, без пути. Относительные пути (`../note`, `sub/file.md`) резолвятся и нормализуются до чистого имени файла.
 
 ## Конкурентность
 

@@ -1,211 +1,302 @@
 mod tag_index;
 mod date_index;
+mod link_index;
 
-use std::path::PathBuf;
-use std::fs;
-use std::path::Path;
+pub use tag_index::*;
+pub use date_index::*;
+pub use link_index::*;
+
+use std::path::{Path, PathBuf};
 use dashmap::DashMap;
-use crate::note::Note;
+use serde::{Deserialize, Serialize};
+use crate::diagnostics::Diagnostics;
+use crate::note_model::ByteSpan;
+use crate::util::normalize_path;
 
-pub use tag_index::TagIndex;
-pub use date_index::DateIndex;
-
-#[derive(Debug, Default)]
-pub struct FulltextIndex {
-    terms: DashMap<String, Vec<PathBuf>>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileIndexState {
+    pub tags: Vec<String>,
+    pub dates: Vec<chrono::NaiveDate>,
 }
 
-impl FulltextIndex {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn add(&self, term: &str, path: PathBuf) {
-        let lower = term.to_lowercase();
-        self.terms.entry(lower)
-            .or_insert_with(Vec::new)
-            .push(path);
-    }
-
-    pub fn search(&self, term: &str) -> Vec<PathBuf> {
-        self.terms.get(&term.to_lowercase())
-            .map(|v| v.clone())
-            .unwrap_or_default()
-    }
-
-    pub fn clear(&self) {
-        self.terms.clear();
-    }
-}
-
-#[derive(Debug, Default)]
 pub struct ConcurrentIndex {
     pub tags: TagIndex,
     pub dates: DateIndex,
-    pub fulltext: FulltextIndex,
-    pub file_states: DashMap<PathBuf, u64>,
+    pub links: LinkIndex,
+    pub diagnostics: Diagnostics,
+    pub file_states: DashMap<PathBuf, FileIndexState>,
 }
 
 impl ConcurrentIndex {
     pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn index_note(&self, note: &Note) {
-        for tag in &note.metadata.tags {
-            self.tags.add(tag, note.path.clone());
-        }
-        for date in &note.metadata.dates {
-            self.dates.add(*date, note.path.clone());
-        }
-        for word in note.metadata.title.split_whitespace() {
-            self.fulltext.add(word, note.path.clone());
+        ConcurrentIndex {
+            tags: TagIndex::new(),
+            dates: DateIndex::new(),
+            links: LinkIndex::new(),
+            diagnostics: Diagnostics::new(),
+            file_states: DashMap::new(),
         }
     }
 
     pub fn clear(&self) {
         self.tags.clear();
         self.dates.clear();
-        self.fulltext.clear();
+        self.links.clear();
+        self.diagnostics.clear();
         self.file_states.clear();
     }
 
-    pub fn save(&self, path: &Path) -> Result<(), String> {
-        fs::create_dir_all(path)
-            .map_err(|e| format!("Failed to create index dir: {}", e))?;
+    /// Reindex one file — parse, update all indexes, run diagnostics.
+    pub fn reindex_file(
+        &self,
+        path: &Path,
+        content: &str,
+        vault_path: &Path,
+        filename_index: &std::collections::HashMap<String, Vec<PathBuf>>,
+    ) {
+        use crate::parser::parse_content;
 
-        let tags_path = path.join("tags.json");
-        let tag_data: Vec<(String, Vec<PathBuf>)> = {
-            let tag_names = self.tags.all_tags();
-            tag_names.into_iter().map(|tag| {
-                let paths = self.tags.get(&tag);
-                (tag, paths)
-            }).collect()
-        };
-        fs::write(&tags_path, serde_json::to_string_pretty(&tag_data)
-            .map_err(|e| format!("Serialize tags: {}", e))?)
-            .map_err(|e| format!("Write tags: {}", e))?;
+        // Always remove old state before reindexing
+        self.tags.remove_file(path);
+        self.dates.remove_file(path);
+        self.links.remove_file(path);
+        self.diagnostics.remove(path);
 
-        let dates_path = path.join("dates.json");
-        let date_data: Vec<(String, Vec<PathBuf>)> = {
-            self.dates.all_dates().into_iter().map(|(date, paths)| {
-                (date.format("%d.%m.%Y").to_string(), paths)
-            }).collect()
-        };
-        fs::write(&dates_path, serde_json::to_string_pretty(&date_data)
-            .map_err(|e| format!("Serialize dates: {}", e))?)
-            .map_err(|e| format!("Write dates: {}", e))?;
+        let result = parse_content(content);
 
-        Ok(())
-    }
-
-    pub fn load(path: &Path) -> Result<Self, String> {
-        let index = Self::new();
-
-        let tags_path = path.join("tags.json");
-        if tags_path.exists() {
-            let data = fs::read_to_string(&tags_path)
-                .map_err(|e| format!("Read tags: {}", e))?;
-            let tag_data: Vec<(String, Vec<PathBuf>)> = serde_json::from_str(&data)
-                .map_err(|e| format!("Parse tags: {}", e))?;
-            for (tag, paths) in tag_data {
-                for p in paths {
-                    index.tags.add(&tag, p);
-                }
-            }
+        for tag_span in &result.tags {
+            self.tags.add(
+                path.to_path_buf(),
+                &tag_span.name,
+                ByteSpan { offset: tag_span.span.offset, length: tag_span.span.length },
+            );
+        }
+        for date_span in &result.dates {
+            self.dates.add(
+                path.to_path_buf(),
+                date_span.date,
+                ByteSpan { offset: date_span.span.offset, length: date_span.span.length },
+            );
+        }
+        for link_span in &result.links {
+            let raw_target = PathBuf::from(&link_span.file_name);
+            let resolved = if raw_target.is_absolute() {
+                raw_target
+            } else {
+                path.parent().unwrap_or(Path::new("")).join(&raw_target)
+            };
+            let normalized = normalize_path(&resolved);
+            let flattened = normalized
+                .file_stem()
+                .unwrap_or(normalized.as_os_str())
+                .to_string_lossy()
+                .to_string();
+            let target = PathBuf::from(flattened);
+            let entry = LinkEntry {
+                source: path.to_path_buf(),
+                target: target.clone(),
+                label: link_span.label.clone(),
+                span: ByteSpan { offset: link_span.span.offset, length: link_span.span.length },
+            };
+            self.links.add(path.to_path_buf(), entry);
         }
 
-        let dates_path = path.join("dates.json");
-        if dates_path.exists() {
-            let data = fs::read_to_string(&dates_path)
-                .map_err(|e| format!("Read dates: {}", e))?;
-            let date_data: Vec<(String, Vec<PathBuf>)> = serde_json::from_str(&data)
-                .map_err(|e| format!("Parse dates: {}", e))?;
-            for (date_str, paths) in date_data {
-                if let Ok(date) = chrono::NaiveDate::parse_from_str(&date_str, "%d.%m.%Y") {
-                    for p in paths {
-                        index.dates.add(date, p);
-                    }
-                }
-            }
-        }
+        // Diagnostics
+        self.diagnostics.check_file(path, content, vault_path, filename_index);
 
-        Ok(index)
+        self.file_states.insert(path.to_path_buf(), FileIndexState {
+            tags: result.tags.iter().map(|t| t.name.clone()).collect(),
+            dates: result.dates.iter().map(|d| d.date).collect(),
+        });
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use chrono::NaiveDate;
-    use crate::note::{Note, NoteMetadata};
 
-    fn make_note(name: &str, tags: Vec<&str>, dates: Vec<&str>) -> Note {
-        Note {
-            path: PathBuf::from(format!("{}.md", name)),
-            metadata: NoteMetadata {
-                title: name.to_string(),
-                links: vec![],
-                tags: tags.into_iter().map(String::from).collect(),
-                dates: dates.into_iter()
-                    .filter_map(|d| NaiveDate::parse_from_str(d, "%d.%m.%Y").ok())
-                    .collect(),
+    fn empty_index() -> std::collections::HashMap<String, Vec<PathBuf>> {
+        std::collections::HashMap::new()
+    }
+
+    #[test]
+    fn test_clear_all() {
+        let index = ConcurrentIndex::new();
+        let path = PathBuf::from("test.md");
+        index.tags.add(path.clone(), "tag", ByteSpan { offset: 0, length: 4 });
+        index.dates.add(path.clone(), chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), ByteSpan { offset: 0, length: 12 });
+        let entry = LinkEntry {
+            source: path.clone(),
+            target: PathBuf::from("other.md"),
+            label: "other".to_string(),
+            span: ByteSpan { offset: 0, length: 10 },
+        };
+        index.links.add(path.clone(), entry);
+        index.diagnostics.check_file(&path, "[[]]", &PathBuf::from("."), &empty_index());
+        index.file_states.insert(path.clone(), FileIndexState { tags: vec!["tag".to_string()], dates: vec![] });
+        index.clear();
+        assert!(index.tags.all_tags().is_empty());
+        assert!(index.dates.all_dates().is_empty());
+        assert!(index.links.all_targets().is_empty());
+        assert!(index.diagnostics.all().is_empty());
+        assert!(index.file_states.is_empty());
+    }
+
+    #[test]
+    fn test_reindex_replaces_state() {
+        let index = ConcurrentIndex::new();
+        let path = PathBuf::from("test.md");
+        let content_a = "@tag1 !15.01.2024";
+        index.reindex_file(&path, content_a, &PathBuf::from("."), &empty_index());
+        assert!(index.tags.get("tag1").len() == 1);
+        let content_b = "@tag2";
+        index.reindex_file(&path, content_b, &PathBuf::from("."), &empty_index());
+        assert!(index.tags.get("tag1").is_empty(), "old tag should be removed");
+        assert!(index.tags.get("tag2").len() == 1, "new tag should be indexed");
+    }
+
+    #[test]
+    fn test_table_driven_reindex_file() {
+        struct Case {
+            name: &'static str,
+            content: &'static str,
+            check: fn(&ConcurrentIndex, &mut Vec<String>),
+        }
+
+        let cases: Vec<Case> = vec![
+            Case {
+                name: "file with multiple links indexes all of them",
+                content: "[[alpha]] and [[beta]] and [[gamma]]",
+                check: |idx, errors| {
+                    let targets = idx.links.all_targets();
+                    if targets.len() != 3 {
+                        errors.push(format!("expected 3 link targets, got {}", targets.len()));
+                    }
+                },
             },
+            Case {
+                name: "file with no links produces no link targets",
+                content: "just plain text without any links",
+                check: |idx, errors| {
+                    let targets = idx.links.all_targets();
+                    if targets.len() != 0 {
+                        errors.push(format!("expected 0 link targets, got {}", targets.len()));
+                    }
+                },
+            },
+            Case {
+                name: "reindexing replaces old links with new ones",
+                content: "[[replaced]]",
+                check: |idx, errors| {
+                    let targets = idx.links.all_targets();
+                    if targets.len() != 1 || targets[0] != PathBuf::from("replaced") {
+                        errors.push(format!("expected [replaced], got {:?}", targets));
+                    }
+                },
+            },
+            Case {
+                name: "file with multiple tags indexes all",
+                content: "@work @project @urgent",
+                check: |idx, errors| {
+                    for tag in &["work", "project", "urgent"] {
+                        if idx.tags.get(tag).is_empty() {
+                            errors.push(format!("expected tag '{}' to be indexed", tag));
+                        }
+                    }
+                },
+            },
+            Case {
+                name: "file with dates indexes dates",
+                content: "start !01.06.2026 end !15.06.2026",
+                check: |idx, errors| {
+                    let all = idx.dates.all_dates();
+                    if all.len() != 2 {
+                        errors.push(format!("expected 2 dates, got {}", all.len()));
+                    }
+                },
+            },
+            Case {
+                name: "absolute path link is indexed by file_stem",
+                content: "[[/tmp/abs-test]]",
+                check: |idx, errors| {
+                    let targets = idx.links.all_targets();
+                    if targets.len() != 1 {
+                        errors.push(format!("expected 1 target, got {}", targets.len()));
+                    } else if targets[0] != PathBuf::from("abs-test") {
+                        errors.push(format!("expected abs-test, got {:?}", targets[0]));
+                    }
+                },
+            },
+        ];
+
+        for (i, case) in cases.into_iter().enumerate() {
+            let index = ConcurrentIndex::new();
+            let path = PathBuf::from(format!("test_{}.md", i));
+            index.reindex_file(&path, case.content, &PathBuf::from("."), &empty_index());
+            let mut errors: Vec<String> = Vec::new();
+            (case.check)(&index, &mut errors);
+            assert!(errors.is_empty(), "case {} ({}): {}", i, case.name, errors.join("; "));
         }
     }
 
     #[test]
-    fn test_index_note_tags() {
-        let idx = ConcurrentIndex::new();
-        let note = make_note("test", vec!["project", "todo"], vec![]);
-        idx.index_note(&note);
+    fn test_table_driven_reindex_replaces_old_links() {
+        struct Case {
+            name: &'static str,
+            first_content: &'static str,
+            second_content: &'static str,
+            check: fn(&ConcurrentIndex, &mut Vec<String>),
+        }
 
-        assert!(!idx.tags.get("project").is_empty());
-        assert!(!idx.tags.get("todo").is_empty());
-    }
+        let cases: Vec<Case> = vec![
+            Case {
+                name: "reindex removes old links and adds new ones",
+                first_content: "[[old-link]]",
+                second_content: "[[new-link]]",
+                check: |idx, errors| {
+                    let old_bl = idx.links.backlinks(&PathBuf::from("old-link"));
+                    if old_bl.len() != 0 {
+                        errors.push("old link should be gone after reindex".into());
+                    }
+                    let new_bl = idx.links.backlinks(&PathBuf::from("new-link"));
+                    if new_bl.len() != 1 {
+                        errors.push("new link should exist after reindex".into());
+                    }
+                },
+            },
+            Case {
+                name: "reindex with empty content clears all links",
+                first_content: "[[link-a]] [[link-b]]",
+                second_content: "",
+                check: |idx, errors| {
+                    if idx.links.all_targets().len() != 0 {
+                        errors.push("reindexing to empty content should clear all links".into());
+                    }
+                },
+            },
+            Case {
+                name: "reindex with empty content clears all tags",
+                first_content: "@tag1 @tag2",
+                second_content: "",
+                check: |idx, errors| {
+                    if !idx.tags.get("tag1").is_empty() {
+                        errors.push("tag1 should be gone after reindex".into());
+                    }
+                    if !idx.tags.get("tag2").is_empty() {
+                        errors.push("tag2 should be gone after reindex".into());
+                    }
+                },
+            },
+        ];
 
-    #[test]
-    fn test_index_note_dates() {
-        let idx = ConcurrentIndex::new();
-        let note = make_note("test", vec![], vec!["21.07.2003"]);
-        idx.index_note(&note);
-
-        let date = NaiveDate::from_ymd_opt(2003, 7, 21).unwrap();
-        assert!(!idx.dates.get(date).is_empty());
-    }
-
-    #[test]
-    fn test_index_clear() {
-        let idx = ConcurrentIndex::new();
-        let note = make_note("test", vec!["project"], vec![]);
-        idx.index_note(&note);
-        idx.clear();
-        assert!(idx.tags.all_tags().is_empty());
-    }
-
-    #[test]
-    fn test_index_save_and_load() {
-        use std::fs;
-
-        let dir = std::env::temp_dir().join("simpler_notes_index_test_persist");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-
-        let idx = ConcurrentIndex::new();
-        let note = make_note("test", vec!["project"], vec!["21.07.2003"]);
-        idx.index_note(&note);
-
-        let save_result = idx.save(&dir);
-        assert!(save_result.is_ok());
-        assert!(dir.join("tags.json").exists());
-        assert!(dir.join("dates.json").exists());
-
-        let loaded = ConcurrentIndex::load(&dir).unwrap();
-        assert!(!loaded.tags.get("project").is_empty());
-        let date = chrono::NaiveDate::from_ymd_opt(2003, 7, 21).unwrap();
-        assert!(!loaded.dates.get(date).is_empty());
-
-        let _ = fs::remove_dir_all(&dir);
+        for (i, case) in cases.into_iter().enumerate() {
+            let index = ConcurrentIndex::new();
+            let path = PathBuf::from("replace.md");
+            index.reindex_file(&path, case.first_content, &PathBuf::from("."), &empty_index());
+            index.reindex_file(&path, case.second_content, &PathBuf::from("."), &empty_index());
+            let mut errors: Vec<String> = Vec::new();
+            (case.check)(&index, &mut errors);
+            assert!(errors.is_empty(), "case {} ({}): {}", i, case.name, errors.join("; "));
+        }
     }
 }
