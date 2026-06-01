@@ -89,7 +89,7 @@ pub enum Severity { Warning }
 
 impl Diagnostics {
     pub fn new() -> Self;
-    pub fn check_file(&self, path: &Path, content: &str, vault_path: &Path);
+    pub fn check_file(&self, path: &Path, content: &str, vault_path: &Path, filename_index: &HashMap<String, Vec<PathBuf>>);
     pub fn get(&self, path: &Path) -> Vec<Diagnostic>;
     pub fn all(&self) -> Vec<(PathBuf, Vec<Diagnostic>)>;
     pub fn remove(&self, path: &Path);
@@ -121,14 +121,15 @@ pub struct ConcurrentIndex { /* tags, dates, links, diagnostics, file_states */ 
 
 ```rust
 pub struct LinkEntry {
-    pub source: PathBuf,
-    pub target: PathBuf,
-    pub label: String,
+    pub source: PathBuf,     // откуда ссылка
+    pub target: PathBuf,     // куда ссылка (file_stem, без .md, без пути)
+    pub label: String,       // отображаемый текст
     pub span: ByteSpan,
 }
+```
 
 Методы `ConcurrentIndex`:
-- `new()`, `reindex_file(path, content)`, `save(path)`, `load(path)`, `clear()`
+- `new()`, `reindex_file(path, content, vault_path, filename_index)`, `save(path)`, `load(path)`, `clear()`
 
 ```rust
 pub struct FileIndexState {

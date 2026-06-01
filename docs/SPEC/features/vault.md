@@ -101,6 +101,7 @@ impl Vault {
 - `ConcurrentIndex` (tag, date, links, diagnostics, file_states) — как в [tag-index](./tag-index.md), [date-index](./date-index.md), [link-index](./link-index.md), [diagnostics](./diagnostics.md)
 - Индекс хранит `тег/дата → [(путь, [позиции])]` и `файл → [[ссылки на файл]]` — с позициями для подсветки и навигации
 - `file_states` — обратный индекс: `файл → {tags, dates}` для инкрементальной переиндексации
+- `filename_index` — маппинг `file_stem → [пути]` для проверки коллизий имён при диагностике ссылок
 - Fulltext-поиск выполняется внешним инструментом (`ripgrep`), см. [query-language](./query-language.md)
 
 ## Индексация
@@ -149,7 +150,19 @@ pub fn reindex_file(&self, path: &Path, content: &str) {
         self.dates.add(path.to_path_buf(), date_span.date, date_span.span);
     }
     for link_span in &parse_result.links {
-        let target = PathBuf::from(&link_span.file_name);
+        let raw_target = PathBuf::from(&link_span.file_name);
+        let resolved = if raw_target.is_absolute() {
+            raw_target
+        } else {
+            path.parent().unwrap_or(Path::new("")).join(&raw_target)
+        };
+        let normalized = normalize_path(&resolved);
+        let file_stem = normalized
+            .file_stem()
+            .unwrap_or(normalized.as_os_str())
+            .to_string_lossy()
+            .to_string();
+        let target = PathBuf::from(file_stem);
         let entry = LinkEntry {
             source: path.to_path_buf(),
             target: target.clone(),
@@ -160,7 +173,7 @@ pub fn reindex_file(&self, path: &Path, content: &str) {
     }
 
     // 3. Diagnostics
-    self.diagnostics.check_file(path, content, &self.path);
+    self.diagnostics.check_file(path, content, &self.path, &filename_index);
 
     // 4. Сохранить новое состояние файла
     self.file_states.insert(path.to_path_buf(), FileIndexState {
@@ -172,17 +185,31 @@ pub fn reindex_file(&self, path: &Path, content: &str) {
 
 ### Полная перестройка
 
-`reindex_all()` очищает индекс и парсит все .md файлы заново:
+`reindex_all()` очищает индекс и парсит все .md файлы заново. Перед индексацией строится `filename_index`:
+
+```rust
+fn build_filename_index(&self) -> HashMap<String, Vec<PathBuf>> {
+    let mut map = HashMap::new();
+    for entry in self.list_md_files() {
+        if let Some(stem) = entry.file_stem() {
+            let name = stem.to_string_lossy().to_string();
+            map.entry(name).or_default().push(entry);
+        }
+    }
+    map
+}
+```
 
 ```rust
 impl Vault {
     pub fn reindex_all(&self) -> Result<IndexReport, String> {
         self.index.clear();
+        let filename_index = self.build_filename_index();
         let md_files = self.list_md_files()?;
         for path in &md_files {
             let content = std::fs::read_to_string(path)
                 .map_err(|e| e.to_string())?;
-            self.index.reindex_file(path, &content);
+            self.index.reindex_file(path, &content, &filename_index);
         }
         self.index.save(&self.path)?;
         Ok(self.validate_indexes())

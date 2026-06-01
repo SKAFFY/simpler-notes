@@ -23,7 +23,7 @@ impl ConcurrentIndex {
             .collect();
         fs::write(
             index_dir.join("tags.json"),
-            serde_json::to_string(&tags).map_err(|e| e.to_string())?,
+            serde_json::to_string_pretty(&tags).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
         let dates: Vec<(NaiveDate, Vec<DateEntry>)> = self.dates.iter()
@@ -31,7 +31,7 @@ impl ConcurrentIndex {
             .collect();
         fs::write(
             index_dir.join("dates.json"),
-            serde_json::to_string(&dates).map_err(|e| e.to_string())?,
+            serde_json::to_string_pretty(&dates).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
         let links: Vec<(std::path::PathBuf, Vec<LinkEntry>)> = self.links.iter()
@@ -39,7 +39,7 @@ impl ConcurrentIndex {
             .collect();
         fs::write(
             index_dir.join("links.json"),
-            serde_json::to_string(&links).map_err(|e| e.to_string())?,
+            serde_json::to_string_pretty(&links).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
         let meta = MetadataV1 {
@@ -48,7 +48,7 @@ impl ConcurrentIndex {
         };
         fs::write(
             index_dir.join("metadata.json"),
-            serde_json::to_string(&meta).map_err(|e| e.to_string())?,
+            serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
         Ok(())
@@ -152,7 +152,7 @@ mod tests {
         let index_dir = dir.path().join(".index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let meta = serde_json::json!({"version": 999, "last_rebuild": "now"});
-        std::fs::write(index_dir.join("metadata.json"), serde_json::to_string(&meta).unwrap()).unwrap();
+        std::fs::write(index_dir.join("metadata.json"), serde_json::to_string_pretty(&meta).unwrap()).unwrap();
         std::fs::write(index_dir.join("tags.json"), "[]").unwrap();
         std::fs::write(index_dir.join("dates.json"), "[]").unwrap();
         std::fs::write(index_dir.join("links.json"), "[]").unwrap();

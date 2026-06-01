@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 use crate::index::ConcurrentIndex;
@@ -98,7 +98,7 @@ impl SearchEngine {
                     .collect()
             }
             QueryExpr::Link(target) => {
-                let target_path = vault_path.join(target).with_extension("md");
+                let target_path = PathBuf::from(target);
                 let results = self.index.links.backlinks(&target_path);
                 results.into_iter()
                     .map(|e| e.source.to_string_lossy().to_string())
@@ -186,7 +186,6 @@ fn parse_rg_line(line: &str) -> Option<SearchResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -396,5 +395,36 @@ mod tests {
         assert!(results.is_empty());
         let results = engine.execute_query(&QueryExpr::Content("hello".to_string()), dir.path());
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_text_query_without_index_dir() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = dir.path().to_path_buf();
+        std::fs::write(vault_path.join("note.md"), "hello world").unwrap();
+        let index = crate::index::ConcurrentIndex::new();
+        let engine = SearchEngine::new(Arc::new(index));
+        let results = engine.execute_query(&QueryExpr::Text("hello".to_string()), &vault_path);
+        assert!(results.is_empty(), "no .index dir -> empty results");
+    }
+
+    #[test]
+    fn test_execute_link_query() {
+        let index = crate::index::ConcurrentIndex::new();
+        let path_a = std::path::PathBuf::from("source.md");
+        let target = PathBuf::from("target-note");
+        let span = crate::note_model::ByteSpan { offset: 0, length: 10 };
+        let entry = crate::index::LinkEntry {
+            source: path_a.clone(),
+            target: target.clone(),
+            label: "target-note".to_string(),
+            span,
+        };
+        index.links.add(path_a.clone(), entry);
+        let engine = SearchEngine::new(Arc::new(index));
+        let dir = TempDir::new().unwrap();
+        let results = engine.execute_query(&QueryExpr::Link("target-note".to_string()), dir.path());
+        assert_eq!(results.len(), 1, "link query should find 1 source");
+        assert!(results[0].contains("source.md"));
     }
 }

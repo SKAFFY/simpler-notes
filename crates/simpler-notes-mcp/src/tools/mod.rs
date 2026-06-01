@@ -8,7 +8,11 @@ pub mod write_note;
 pub mod list_notes;
 pub mod get_tags;
 pub mod get_dates;
+pub mod get_backlinks;
+pub mod get_outgoing_links;
+#[cfg(feature = "git")]
 pub mod git_push;
+#[cfg(feature = "git")]
 pub mod git_pull;
 pub mod validate_indexes;
 pub mod reindex;
@@ -21,7 +25,11 @@ pub fn register_all(dispatcher: &mut Dispatcher, vault: Arc<Vault>) {
     dispatcher.register("list_notes", Arc::new(list_notes::ListNotesTool::new(vault.clone())));
     dispatcher.register("get_tags", Arc::new(get_tags::GetTagsTool::new(vault.clone())));
     dispatcher.register("get_dates", Arc::new(get_dates::GetDatesTool::new(vault.clone())));
+    dispatcher.register("get_backlinks", Arc::new(get_backlinks::GetBacklinksTool::new(vault.clone())));
+    dispatcher.register("get_outgoing_links", Arc::new(get_outgoing_links::GetOutgoingLinksTool::new(vault.clone())));
+    #[cfg(feature = "git")]
     dispatcher.register("git_push", Arc::new(git_push::GitPushTool::new(vault.clone())));
+    #[cfg(feature = "git")]
     dispatcher.register("git_pull", Arc::new(git_pull::GitPullTool::new(vault.clone())));
     dispatcher.register("validate_indexes", Arc::new(validate_indexes::ValidateIndexesTool::new(vault.clone())));
     dispatcher.register("reindex", Arc::new(reindex::ReindexTool::new(vault.clone())));

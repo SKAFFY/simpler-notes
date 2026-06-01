@@ -1,5 +1,6 @@
 pub mod note_model;
 pub mod parser;
+pub mod util;
 pub mod buffer;
 pub mod diagnostics;
 pub mod index;

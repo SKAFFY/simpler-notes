@@ -222,4 +222,86 @@ mod tests {
         assert_eq!(result.errors.len(), 1);
         assert_eq!(result.errors[0].kind, ParseErrorKind::EmptyLink);
     }
+
+    #[test]
+    fn test_table_driven_links() {
+        struct Case {
+            input: &'static str,
+            expected_links: usize,
+            expected_errors: usize,
+            first_file_name: Option<&'static str>,
+            first_label: Option<&'static str>,
+        }
+
+        let cases = vec![
+            Case { input: "[[simple]]", expected_links: 1, expected_errors: 0, first_file_name: Some("simple"), first_label: Some("simple") },
+            Case { input: "[[with spaces]]", expected_links: 1, expected_errors: 0, first_file_name: Some("with spaces"), first_label: Some("with spaces") },
+            Case { input: "[[a|b]]", expected_links: 1, expected_errors: 0, first_file_name: Some("a"), first_label: Some("b") },
+            Case { input: "[[|empty label]]", expected_links: 0, expected_errors: 1, first_file_name: None, first_label: None },
+            Case { input: "[[multi|line|pipe]]", expected_links: 1, expected_errors: 0, first_file_name: Some("multi"), first_label: Some("line|pipe") },
+            Case { input: "no brackets", expected_links: 0, expected_errors: 0, first_file_name: None, first_label: None },
+            Case { input: "[[incomplete", expected_links: 0, expected_errors: 0, first_file_name: None, first_label: None },
+            Case { input: "incomplete]]", expected_links: 0, expected_errors: 0, first_file_name: None, first_label: None },
+            Case { input: "[[double]] [[links]]", expected_links: 2, expected_errors: 0, first_file_name: Some("double"), first_label: Some("double") },
+        ];
+
+        for (i, case) in cases.into_iter().enumerate() {
+            let result = parse_content(case.input);
+            assert_eq!(result.links.len(), case.expected_links, "case {}: links count mismatch", i);
+            assert_eq!(result.errors.len(), case.expected_errors, "case {}: errors count mismatch", i);
+            if let (Some(fname), Some(flabel)) = (case.first_file_name, case.first_label) {
+                assert_eq!(result.links[0].file_name, fname, "case {}: file_name mismatch", i);
+                assert_eq!(result.links[0].label, flabel, "case {}: label mismatch", i);
+            }
+        }
+    }
+
+    #[test]
+    fn test_table_driven_dates() {
+        struct Case {
+            input: &'static str,
+            expected_dates: usize,
+            expected_errors: usize,
+        }
+
+        let cases = vec![
+            Case { input: "!01.01.2024", expected_dates: 1, expected_errors: 0 },
+            Case { input: "!31.12.1999", expected_dates: 1, expected_errors: 0 },
+            Case { input: "!29.02.2020", expected_dates: 1, expected_errors: 0 }, // leap year
+            Case { input: "!29.02.2021", expected_dates: 0, expected_errors: 1 }, // not leap year
+            Case { input: "!00.01.2024", expected_dates: 0, expected_errors: 1 }, // day 0
+            Case { input: "!01.00.2024", expected_dates: 0, expected_errors: 1 }, // month 0
+            Case { input: "text no date", expected_dates: 0, expected_errors: 0 },
+            Case { input: "!!01.01.2024", expected_dates: 0, expected_errors: 0 },
+        ];
+
+        for (i, case) in cases.into_iter().enumerate() {
+            let result = parse_content(case.input);
+            assert_eq!(result.dates.len(), case.expected_dates, "case {}: dates count mismatch", i);
+            assert_eq!(result.errors.len(), case.expected_errors, "case {}: errors count mismatch", i);
+        }
+    }
+
+    #[test]
+    fn test_table_driven_tags() {
+        struct Case {
+            input: &'static str,
+            expected_tags: Vec<&'static str>,
+        }
+
+        let cases = vec![
+            Case { input: "@tag", expected_tags: vec!["tag"] },
+            Case { input: "@tag1 @tag2", expected_tags: vec!["tag1", "tag2"] },
+            Case { input: "@tag with spaces", expected_tags: vec!["tag"] },
+            Case { input: "no tags here", expected_tags: vec![] },
+            Case { input: "@TAG123", expected_tags: vec!["TAG123"] },
+            Case { input: "@under_score", expected_tags: vec!["under_score"] },
+        ];
+
+        for (i, case) in cases.into_iter().enumerate() {
+            let result = parse_content(case.input);
+            let names: Vec<&str> = result.tags.iter().map(|t| t.name.as_str()).collect();
+            assert_eq!(names, case.expected_tags, "case {}: tags mismatch", i);
+        }
+    }
 }

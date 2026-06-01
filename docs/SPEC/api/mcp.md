@@ -191,3 +191,39 @@ Pull из remote.
   "diagnostics": []
 }
 ```
+
+### `get_backlinks`
+
+Какие файлы ссылаются на указанную заметку.
+
+**Arguments:**
+```json
+{"path": "notes/project.md"}
+```
+
+**Result:**
+```json
+[
+  {"source": "notes/reference.md", "target": "project", "label": "My Project"},
+  {"source": "notes/index.md", "target": "project", "label": "project"}
+]
+```
+
+`target` — плоское имя файла (file_stem) без расширения и без пути.
+
+### `get_outgoing_links`
+
+На какие файлы ссылается указанная заметка.
+
+**Arguments:**
+```json
+{"path": "notes/source.md"}
+```
+
+**Result:**
+```json
+[
+  {"source": "notes/source.md", "target": "project", "label": "My Project"},
+  {"source": "notes/source.md", "target": "todo", "label": "todo"}
+]
+```

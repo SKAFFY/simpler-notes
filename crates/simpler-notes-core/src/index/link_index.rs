@@ -77,17 +77,21 @@ impl LinkIndex {
 mod tests {
     use super::*;
 
+    fn make_entry(source: &str, target: &str, label: &str) -> LinkEntry {
+        LinkEntry {
+            source: PathBuf::from(source),
+            target: PathBuf::from(target),
+            label: label.to_string(),
+            span: ByteSpan { offset: 0, length: 10 },
+        }
+    }
+
     #[test]
     fn test_add_and_backlinks() {
         let index = LinkIndex::new();
         let source = PathBuf::from("a.md");
         let target = PathBuf::from("b.md");
-        let entry = LinkEntry {
-            source: source.clone(),
-            target: target.clone(),
-            label: "B".to_string(),
-            span: ByteSpan { offset: 0, length: 10 },
-        };
+        let entry = make_entry("a.md", "b.md", "B");
         index.add(source.clone(), entry);
         let backlinks = index.backlinks(&target);
         assert_eq!(backlinks.len(), 1);
@@ -99,12 +103,7 @@ mod tests {
         let index = LinkIndex::new();
         let source = PathBuf::from("a.md");
         let target = PathBuf::from("b.md");
-        let entry = LinkEntry {
-            source: source.clone(),
-            target: target.clone(),
-            label: "B".to_string(),
-            span: ByteSpan { offset: 0, length: 10 },
-        };
+        let entry = make_entry("a.md", "b.md", "B");
         index.add(source.clone(), entry);
         let outgoing = index.outgoing(&source);
         assert_eq!(outgoing.len(), 1);
@@ -116,12 +115,7 @@ mod tests {
         let index = LinkIndex::new();
         let source = PathBuf::from("a.md");
         let target = PathBuf::from("b.md");
-        let entry = LinkEntry {
-            source: source.clone(),
-            target: target.clone(),
-            label: "B".to_string(),
-            span: ByteSpan { offset: 0, length: 10 },
-        };
+        let entry = make_entry("a.md", "b.md", "B");
         index.add(source.clone(), entry);
         index.remove_file(&source);
         assert!(index.backlinks(&target).is_empty());
@@ -130,18 +124,8 @@ mod tests {
     #[test]
     fn test_all_targets() {
         let index = LinkIndex::new();
-        let entry_a = LinkEntry {
-            source: PathBuf::from("x.md"),
-            target: PathBuf::from("t.md"),
-            label: "T".to_string(),
-            span: ByteSpan { offset: 0, length: 10 },
-        };
-        let entry_b = LinkEntry {
-            source: PathBuf::from("y.md"),
-            target: PathBuf::from("t.md"),
-            label: "T".to_string(),
-            span: ByteSpan { offset: 0, length: 10 },
-        };
+        let entry_a = make_entry("x.md", "t.md", "T");
+        let entry_b = make_entry("y.md", "t.md", "T");
         index.add(PathBuf::from("x.md"), entry_a);
         index.add(PathBuf::from("y.md"), entry_b);
         let targets = index.all_targets();
@@ -152,14 +136,93 @@ mod tests {
     #[test]
     fn test_clear() {
         let index = LinkIndex::new();
-        let entry = LinkEntry {
-            source: PathBuf::from("a.md"),
-            target: PathBuf::from("b.md"),
-            label: "B".to_string(),
-            span: ByteSpan { offset: 0, length: 10 },
-        };
-        index.add(PathBuf::from("a.md"), entry);
+        index.add(PathBuf::from("a.md"), make_entry("a.md", "b.md", "B"));
         index.clear();
         assert!(index.backlinks(&PathBuf::from("b.md")).is_empty());
+    }
+
+    #[test]
+    fn test_table_driven_link_index() {
+        struct Case {
+            name: &'static str,
+            setup: fn(&LinkIndex),
+            check: fn(&LinkIndex, &mut Vec<String>),
+        }
+
+        let cases: Vec<Case> = vec![
+            Case {
+                name: "no backlinks for unknown target",
+                setup: |_| {},
+                check: |idx, errors| {
+                    let bl = idx.backlinks(&PathBuf::from("ghost.md"));
+                    if bl.len() != 0 { errors.push(format!("expected 0 backlinks, got {}", bl.len())); }
+                },
+            },
+            Case {
+                name: "multiple sources link to same target",
+                setup: |idx| {
+                    idx.add(PathBuf::from("a.md"), make_entry("a.md", "shared.md", "shared"));
+                    idx.add(PathBuf::from("b.md"), make_entry("b.md", "shared.md", "shared"));
+                    idx.add(PathBuf::from("c.md"), make_entry("c.md", "shared.md", "shared"));
+                },
+                check: |idx, errors| {
+                    let bl = idx.backlinks(&PathBuf::from("shared.md"));
+                    if bl.len() != 3 { errors.push(format!("expected 3 backlinks, got {}", bl.len())); }
+                },
+            },
+            Case {
+                name: "circular link a->b->a",
+                setup: |idx| {
+                    idx.add(PathBuf::from("a.md"), make_entry("a.md", "b.md", "b"));
+                    idx.add(PathBuf::from("b.md"), make_entry("b.md", "a.md", "a"));
+                },
+                check: |idx, errors| {
+                    let bl_a = idx.backlinks(&PathBuf::from("a.md"));
+                    let bl_b = idx.backlinks(&PathBuf::from("b.md"));
+                    if bl_a.len() != 1 { errors.push(format!("expected 1 backlink to a, got {}", bl_a.len())); }
+                    if bl_b.len() != 1 { errors.push(format!("expected 1 backlink to b, got {}", bl_b.len())); }
+                    if bl_a[0].source != PathBuf::from("b.md") { errors.push("a backlink source wrong".into()); }
+                    if bl_b[0].source != PathBuf::from("a.md") { errors.push("b backlink source wrong".into()); }
+                },
+            },
+            Case {
+                name: "outgoing is empty for file with no links",
+                setup: |_| {},
+                check: |idx, errors| {
+                    let og = idx.outgoing(&PathBuf::from("orphan.md"));
+                    if og.len() != 0 { errors.push(format!("expected 0 outgoing, got {}", og.len())); }
+                },
+            },
+            Case {
+                name: "remove_file with no entries is a no-op",
+                setup: |_| {},
+                check: |idx, errors| {
+                    idx.remove_file(&PathBuf::from("nonexistent.md"));
+                    if idx.all_targets().len() != 0 { errors.push("all_targets should be empty after no-op remove".into()); }
+                },
+            },
+            Case {
+                name: "update replaces entries for a source",
+                setup: |idx| {
+                    idx.add(PathBuf::from("a.md"), make_entry("a.md", "old.md", "old"));
+                },
+                check: |idx, errors| {
+                    idx.remove_file(&PathBuf::from("a.md"));
+                    idx.add(PathBuf::from("a.md"), make_entry("a.md", "new.md", "new"));
+                    let bl_old = idx.backlinks(&PathBuf::from("old.md"));
+                    let bl_new = idx.backlinks(&PathBuf::from("new.md"));
+                    if bl_old.len() != 0 { errors.push("old backlink should be gone after update".into()); }
+                    if bl_new.len() != 1 { errors.push("new backlink should exist after update".into()); }
+                },
+            },
+        ];
+
+        for (i, case) in cases.into_iter().enumerate() {
+            let index = LinkIndex::new();
+            (case.setup)(&index);
+            let mut errors: Vec<String> = Vec::new();
+            (case.check)(&index, &mut errors);
+            assert!(errors.is_empty(), "case {} ({}): {}", i, case.name, errors.join("; "));
+        }
     }
 }

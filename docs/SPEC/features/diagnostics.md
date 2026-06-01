@@ -39,6 +39,7 @@ pub enum Severity {
 | `[[]]` (пустая ссылка) | `Empty link` | Warning |
 | `!DD.MM.YYYY` невалидная дата | `Invalid date: 32.13.2000` | Warning |
 | `[[NonExistent]]` — файл не найден | `Broken link: NonExistent — file not found` | Warning |
+| `[[note2]]` — 2+ файла с именем `note2.md` | `Ambiguous link: note2 — multiple files: note2.md, sub/note2.md` | Warning |
 
 ## API
 
@@ -67,7 +68,8 @@ impl Diagnostics {
 ### check_file
 
 ```rust
-fn check_file(&self, path: &Path, content: &str, vault_path: &Path) {
+fn check_file(&self, path: &Path, content: &str, vault_path: &Path,
+              filename_index: &HashMap<String, Vec<PathBuf>>) {
     let parse_result = parse_content(content);
 
     let mut diagnostics: Vec<Diagnostic> = parse_result.errors.into_iter().map(|e| Diagnostic {
@@ -76,21 +78,57 @@ fn check_file(&self, path: &Path, content: &str, vault_path: &Path) {
         severity: Severity::Warning,
     }).collect();
 
-    // Broken link — проверка существования файла
+    // Broken link / Ambiguous link — проверка через filename_index
     for link in &parse_result.links {
-        let full_path = vault_path.join(&link.file_name).with_extension("md");
-        if !full_path.exists() {
-            diagnostics.push(Diagnostic {
-                span: link.span,
-                message: format!("Broken link: {} — file not found", link.file_name),
-                severity: Severity::Warning,
-            });
+        let raw_target = PathBuf::from(&link.file_name);
+        let resolved = if raw_target.is_absolute() {
+            raw_target
+        } else {
+            path.parent().unwrap_or(Path::new("")).join(&raw_target)
+        };
+        let normalized = normalize_path(&resolved);
+        let link_name = normalized
+            .file_stem()
+            .unwrap_or(normalized.as_os_str())
+            .to_string_lossy()
+            .to_string();
+
+        match filename_index.get(&link_name) {
+            None => {
+                diagnostics.push(Diagnostic {
+                    span: link.span,
+                    message: format!("Broken link: {} — file not found", link.file_name),
+                    severity: Severity::Warning,
+                });
+            }
+            Some(files) if files.len() > 1 => {
+                let file_list = files.iter()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                diagnostics.push(Diagnostic {
+                    span: link.span,
+                    message: format!("Ambiguous link: {} — multiple files: {}", link_name, file_list),
+                    severity: Severity::Warning,
+                });
+            }
+            _ => {} // exactly 1 match — OK
         }
     }
 
     self.file_diagnostics.insert(path.to_path_buf(), diagnostics);
 }
 ```
+
+`filename_index` — маппинг `file_stem → Vec<PathBuf>`, строится Vault'ом на основе списка .md файлов.
+
+Логика:
+1. Link target резолвится и нормализуется (resolve относительного пути + normalize_path)
+2. Из нормализованного пути берётся `file_stem()`
+3. По file_stem ищем в filename_index:
+   - **0** вхождений → `BrokenLink` (файл не существует)
+   - **1** вхождение → OK (ровно один файл)
+   - **2+** вхождений → `AmbiguousLink` (коллизия имён)
 
 ## Жизненный цикл
 

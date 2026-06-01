@@ -5,4 +5,5 @@
 !01.07.2026
 
 [[note1]]
-[[sub/subnote.md]]
+[[subnote]]
+[[note2|Alias to Note 2]]

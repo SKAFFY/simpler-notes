@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc;
+use std::collections::HashMap;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher};
 use notify::event::EventKind;
 use std::thread;
@@ -81,8 +82,16 @@ impl Watcher {
                             buf.update(path, content.clone());
                         }
 
+                        // Build filename index for diagnostics
+                        let mut filename_index: HashMap<String, Vec<PathBuf>> = HashMap::new();
+                        if let Some(stem) = path.file_stem() {
+                            filename_index.entry(stem.to_string_lossy().to_string())
+                                .or_default()
+                                .push(path.to_path_buf());
+                        }
+
                         // Reindex
-                        index.reindex_file(path, &content, vault_path);
+                        index.reindex_file(path, &content, vault_path, &filename_index);
 
                         // Persist
                         let _ = index.save(vault_path);
@@ -145,5 +154,97 @@ mod tests {
         // Check that the tag was indexed
         let tags = index.tags.get("tag");
         assert!(!tags.is_empty(), "Expected tag to be indexed after file creation");
+    }
+
+    #[test]
+    fn test_watcher_modify_open_buffer() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = dir.path().to_path_buf();
+        let index = Arc::new(ConcurrentIndex::new());
+        let buffer = Arc::new(RwLock::new(Buffer::new()));
+
+        let file_path = vault_path.join("open.md");
+        fs::write(&file_path, "original").unwrap();
+
+        // Open file in buffer
+        {
+            let mut buf = buffer.write();
+            buf.open(&file_path, "original".to_string());
+        }
+
+        let (_watcher, rx) = Watcher::new(&vault_path).unwrap();
+        Watcher::run_event_loop(rx, vault_path.clone(), index.clone(), buffer.clone());
+
+        // Modify the file
+        fs::write(&file_path, "modified content").unwrap();
+        sleep(Duration::from_millis(200));
+
+        // Buffer should be updated
+        let buf = buffer.read();
+        let content = buf.get(&file_path);
+        assert!(content.is_some(), "file should still be in buffer");
+        assert_eq!(content.unwrap().content, "modified content", "buffer should reflect modified content");
+    }
+
+    #[test]
+    fn test_watcher_remove_event() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = dir.path().to_path_buf();
+        let index = Arc::new(ConcurrentIndex::new());
+        let buffer = Arc::new(RwLock::new(Buffer::new()));
+
+        let file_path = vault_path.join("toremove.md");
+        fs::write(&file_path, "@tag-removed").unwrap();
+
+        // Manually index
+        index.reindex_file(&file_path, "@tag-removed", &vault_path, &HashMap::new());
+        assert!(!index.tags.get("tag-removed").is_empty(), "tag should be indexed");
+
+        // Open in buffer
+        {
+            let mut buf = buffer.write();
+            buf.open(&file_path, "@tag-removed".to_string());
+            assert!(buf.get(&file_path).is_some(), "file should be open in buffer");
+        }
+
+        let (_watcher, rx) = Watcher::new(&vault_path).unwrap();
+        Watcher::run_event_loop(rx, vault_path.clone(), index.clone(), buffer.clone());
+
+        // Remove the file
+        fs::remove_file(&file_path).unwrap();
+        sleep(Duration::from_millis(200));
+
+        // Verify index entries were removed
+        assert!(index.tags.get("tag-removed").is_empty(), "tag should be removed on delete");
+        // Verify buffer entry was closed
+        let buf = buffer.read();
+        assert!(buf.get(&file_path).is_none(), "buffer should close on delete");
+    }
+
+    #[test]
+    fn test_watcher_other_event_kind() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = dir.path().to_path_buf();
+        let index = Arc::new(ConcurrentIndex::new());
+        let buffer = Arc::new(RwLock::new(Buffer::new()));
+
+        let file_path = vault_path.join("other.md");
+        fs::write(&file_path, "test").unwrap();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        Watcher::run_event_loop(rx, vault_path.clone(), index.clone(), buffer.clone());
+
+        // Send an Other event kind — should hit the _ => arm
+        use notify::event::{EventKind, CreateKind};
+        let event = Event {
+            kind: EventKind::Other,
+            paths: vec![file_path.clone()],
+            ..Default::default()
+        };
+        tx.send(Ok(event)).unwrap();
+        sleep(Duration::from_millis(50));
+
+        // File should not be indexed since Other is skipped
+        assert!(index.tags.all_tags().is_empty(), "Other event should not index");
     }
 }
