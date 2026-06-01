@@ -235,7 +235,7 @@ mod tests {
         Watcher::run_event_loop(rx, vault_path.clone(), index.clone(), buffer.clone());
 
         // Send an Other event kind — should hit the _ => arm
-        use notify::event::{EventKind, CreateKind};
+        use notify::event::EventKind;
         let event = Event {
             kind: EventKind::Other,
             paths: vec![file_path.clone()],

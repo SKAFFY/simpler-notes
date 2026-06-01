@@ -17,7 +17,7 @@ impl GetDiagnosticsTool {
 impl Tool for GetDiagnosticsTool {
     fn call(&self, params: Option<Value>) -> Result<Value, (i32, String)> {
         let single_path = params
-            .and_then(|p| p.get("path").and_then(|v| v.as_str().map(|s| PathBuf::from(s))));
+            .and_then(|p| p.get("path").and_then(|v| v.as_str().map(PathBuf::from)));
 
         if let Some(path) = single_path {
             let diags = self.vault.get_diagnostics(&path);
