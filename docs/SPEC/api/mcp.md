@@ -2,6 +2,89 @@
 
 Инструменты, доступные через MCP протокол. JSON-RPC 2.0 через stdio.
 
+## Протокол
+
+Сервер следует MCP протоколу (Model Context Protocol):
+
+### `initialize`
+
+Агент отправляет при подключении. Сервер отвечает со своими capabilities.
+
+**Request:**
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc":"2.0","id":1,
+  "result":{
+    "protocolVersion":"2024-11-05",
+    "capabilities":{"tools":{}},
+    "serverInfo":{"name":"simpler-notes-mcp","version":"0.1.0"}
+  }
+}
+```
+
+### `notifications/initialized`
+
+Уведомление от агента о готовности. Ответа не ожидается.
+
+**Request:**
+```json
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+```
+
+### `tools/list`
+
+Получить список доступных инструментов с описаниями и схемами параметров.
+
+**Request:**
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc":"2.0","id":2,
+  "result":{"tools":[
+    {"name":"search_notes","description":"...","input_schema":{...}},
+    ...
+  ]}
+}
+```
+
+### `tools/call`
+
+Вызвать инструмент по имени с аргументами.
+
+**Request:**
+```json
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"resolve_link","arguments":{"target":"beta"}}}
+```
+
+**Response (success):**
+```json
+{
+  "jsonrpc":"2.0","id":3,
+  "result":{"content":[{"type":"text","text":"{\"path\":\"/vault/notes/beta.md\"}"}],"isError":false}
+}
+```
+
+**Response (error):**
+```json
+{
+  "jsonrpc":"2.0","id":3,
+  "result":{"content":[{"type":"text","text":"Tool not found: ghost"}],"isError":true}
+}
+```
+
+### Legacy режим (обратная совместимость)
+
+Метод можно вызывать напрямую как `tools/call`, так и старым способом — имя метода как `method`. Оба работают.
+
 ## Инструменты
 
 ### `search_notes`
