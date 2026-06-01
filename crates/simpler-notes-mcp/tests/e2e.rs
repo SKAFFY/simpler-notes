@@ -414,3 +414,54 @@ fn test_invalid_json_parse_error() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Parse error"), "expected parse error on stderr, got: {}", stderr);
 }
+
+#[test]
+fn test_resolve_link_finds_beta() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("resolve_link", Some(json!({"target": "beta"})));
+    let path = resp.get("result")
+        .and_then(|r| r.get("path"))
+        .and_then(|p| p.as_str());
+    assert!(path.is_some(), "expected path in result, got: {:?}", resp);
+    assert!(
+        path.unwrap().contains("beta.md"),
+        "expected path to contain beta.md, got: {:?}",
+        path
+    );
+}
+
+#[test]
+fn test_resolve_link_broken_returns_error() {
+    let (_dir, vault_path) = create_test_vault();
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("resolve_link", Some(json!({"target": "ghost"})));
+    let error = resp.get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str());
+    assert!(error.is_some(), "expected error, got: {:?}", resp);
+    assert!(error.unwrap().contains("Broken link"));
+}
+
+#[test]
+fn test_resolve_link_ambiguous_returns_error() {
+    let dir = TempDir::new().unwrap();
+    let vault_path = dir.path().to_path_buf();
+
+    std::fs::create_dir(vault_path.join("notes")).unwrap();
+    std::fs::create_dir(vault_path.join("notes/sub")).unwrap();
+    std::fs::write(vault_path.join("notes/duplicate.md"), "root dup").unwrap();
+    std::fs::write(vault_path.join("notes/sub/duplicate.md"), "sub dup").unwrap();
+    std::fs::create_dir_all(vault_path.join(".simpler-notes")).unwrap();
+
+    let mut client = McpClient::spawn(vault_path.to_str().unwrap());
+
+    let resp = client.send_request("resolve_link", Some(json!({"target": "duplicate"})));
+    let error = resp.get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str());
+    assert!(error.is_some(), "expected error for ambiguous, got: {:?}", resp);
+    assert!(error.unwrap().contains("Ambiguous link"));
+}

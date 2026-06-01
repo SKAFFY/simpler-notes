@@ -174,6 +174,7 @@ impl Vault {
     // Ссылки
     pub fn get_backlinks(&self, target: &Path) -> Vec<LinkEntry>;
     pub fn get_outgoing_links(&self, source: &Path) -> Vec<LinkEntry>;
+    pub fn resolve_link(&self, target: &str) -> Result<PathBuf, String>;
 
     // Управление индексом
     pub fn reindex_all(&self) -> Result<IndexReport, String>;

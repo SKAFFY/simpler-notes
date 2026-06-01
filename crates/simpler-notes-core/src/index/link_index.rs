@@ -15,6 +15,12 @@ pub struct LinkIndex {
     backward: DashMap<PathBuf, Vec<LinkEntry>>,
 }
 
+impl Default for LinkIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinkIndex {
     pub fn new() -> Self {
         LinkIndex { backward: DashMap::new() }

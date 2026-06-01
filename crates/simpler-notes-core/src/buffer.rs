@@ -29,6 +29,12 @@ pub struct Buffer {
     entries: HashMap<PathBuf, BufferEntry>,
 }
 
+impl Default for Buffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Buffer {
     pub fn new() -> Self {
         Buffer { entries: HashMap::new() }

@@ -151,22 +151,7 @@ impl Vault {
     }
 
     pub fn list_markdown_files(&self) -> Vec<PathBuf> {
-        let mut files = Vec::new();
-        for entry in walkdir::WalkDir::new(&self.config.path)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-        {
-            let ext = entry
-                .path()
-                .extension()
-                .and_then(|s| s.to_str())
-                .unwrap_or("");
-            if self.config.extensions.contains(&ext.to_string()) {
-                files.push(entry.path().to_path_buf());
-            }
-        }
-        files
+        self.list_md_files()
     }
 
     pub fn read_note(&self, path: &Path) -> Result<String, String> {
@@ -234,6 +219,20 @@ impl Vault {
 
     pub fn get_outgoing_links(&self, source: &Path) -> Vec<LinkEntry> {
         self.index.links.outgoing(source)
+    }
+
+    /// Resolve a flat link name (file_stem) to the full path of the single matching file.
+    /// Returns an error if 0 or >1 files match (broken or ambiguous link).
+    pub fn resolve_link(&self, target: &str) -> Result<PathBuf, String> {
+        let index = self.build_filename_index();
+        match index.get(target) {
+            None => Err(format!("Broken link: {} — file not found", target)),
+            Some(paths) if paths.len() == 1 => Ok(paths[0].clone()),
+            Some(paths) => {
+                let files: Vec<_> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+                Err(format!("Ambiguous link: {} — multiple files: {}", target, files.join(", ")))
+            }
+        }
     }
 
     pub fn get_diagnostics(&self, path: &Path) -> Vec<Diagnostic> {
@@ -720,6 +719,155 @@ mod tests {
             let index = vault.build_filename_index();
             let mut errors: Vec<String> = Vec::new();
             (case.check)(&index, &mut errors);
+            assert!(
+                errors.is_empty(),
+                "case {} ({}): {}",
+                i,
+                case.name,
+                errors.join("; ")
+            );
+        }
+    }
+
+    #[test]
+    fn test_table_driven_resolve_link() {
+        struct Case {
+            name: &'static str,
+            files: &'static [&'static str],
+            target: &'static str,
+            expect_ok: bool,
+            expect_path_suffix: Option<&'static str>,
+            expect_err_contains: Option<&'static str>,
+        }
+
+        let cases: Vec<Case> = vec![
+            Case {
+                name: "exact match in root",
+                files: &["note.md"],
+                target: "note",
+                expect_ok: true,
+                expect_path_suffix: Some("note.md"),
+                expect_err_contains: None,
+            },
+            Case {
+                name: "exact match in subdirectory",
+                files: &["sub/note.md"],
+                target: "note",
+                expect_ok: true,
+                expect_path_suffix: Some("sub/note.md"),
+                expect_err_contains: None,
+            },
+            Case {
+                name: "broken link — no files",
+                files: &[],
+                target: "ghost",
+                expect_ok: false,
+                expect_path_suffix: None,
+                expect_err_contains: Some("Broken link"),
+            },
+            Case {
+                name: "ambiguous — two files same stem",
+                files: &["note.md", "sub/note.md"],
+                target: "note",
+                expect_ok: false,
+                expect_path_suffix: None,
+                expect_err_contains: Some("Ambiguous link"),
+            },
+            Case {
+                name: "unique stem among multiple files",
+                files: &["a.md", "b.md", "sub/c.md"],
+                target: "c",
+                expect_ok: true,
+                expect_path_suffix: Some("sub/c.md"),
+                expect_err_contains: None,
+            },
+            Case {
+                name: "data-point stem not confused by dot",
+                files: &["notes/data-point.md"],
+                target: "data-point",
+                expect_ok: true,
+                expect_path_suffix: Some("notes/data-point.md"),
+                expect_err_contains: None,
+            },
+            Case {
+                name: "case sensitivity — exact case matches",
+                files: &["Note.md"],
+                target: "Note",
+                expect_ok: true,
+                expect_path_suffix: Some("Note.md"),
+                expect_err_contains: None,
+            },
+            Case {
+                name: "broken link with existing unrelated file",
+                files: &["alpha.md"],
+                target: "beta",
+                expect_ok: false,
+                expect_path_suffix: None,
+                expect_err_contains: Some("Broken link"),
+            },
+            Case {
+                name: "three-way collision",
+                files: &["dup.md", "a/dup.md", "b/dup.md"],
+                target: "dup",
+                expect_ok: false,
+                expect_path_suffix: None,
+                expect_err_contains: Some("Ambiguous link"),
+            },
+        ];
+
+        for (i, case) in cases.into_iter().enumerate() {
+            let dir = TempDir::new().unwrap();
+            for f in case.files {
+                let full = dir.path().join(f);
+                if let Some(parent) = full.parent() {
+                    std::fs::create_dir_all(parent).unwrap();
+                }
+                std::fs::write(&full, "").unwrap();
+            }
+
+            let vault = Vault::open(VaultConfig {
+                path: dir.path().to_path_buf(),
+                ..Default::default()
+            })
+            .unwrap();
+
+            let result = vault.resolve_link(case.target);
+            let mut errors: Vec<String> = Vec::new();
+
+            if case.expect_ok {
+                match result {
+                    Ok(path) => {
+                        let suffix = case.expect_path_suffix.unwrap();
+                        if !path.to_string_lossy().ends_with(suffix) {
+                            errors.push(format!(
+                                "expected path to end with '{}', got '{}'",
+                                suffix,
+                                path.to_string_lossy()
+                            ));
+                        }
+                    }
+                    Err(e) => {
+                        errors.push(format!("expected Ok, got Err({})", e));
+                    }
+                }
+            } else {
+                match result {
+                    Ok(path) => {
+                        errors.push(format!("expected Err, got Ok({})", path.to_string_lossy()));
+                    }
+                    Err(e) => {
+                        if let Some(needle) = case.expect_err_contains {
+                            if !e.contains(needle) {
+                                errors.push(format!(
+                                    "expected error to contain '{}', got '{}'",
+                                    needle, e
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
             assert!(
                 errors.is_empty(),
                 "case {} ({}): {}",

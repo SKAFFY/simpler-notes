@@ -86,6 +86,10 @@ impl Vault {
     /// Куда ссылается source (поиск по backward, O(N)).
     pub fn get_outgoing_links(&self, source: &Path) -> Vec<LinkEntry>;
 
+    /// Разрешить плоское имя ссылки (file_stem) в полный путь к файлу.
+    /// Ошибка если 0 или >1 совпадений.
+    pub fn resolve_link(&self, target: &str) -> Result<PathBuf, String>;
+
     // -- Diagnostics --
 
     /// Diagnostics для одного файла.

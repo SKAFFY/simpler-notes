@@ -10,6 +10,7 @@ pub mod get_tags;
 pub mod get_dates;
 pub mod get_backlinks;
 pub mod get_outgoing_links;
+pub mod resolve_link;
 #[cfg(feature = "git")]
 pub mod git_push;
 #[cfg(feature = "git")]
@@ -27,6 +28,7 @@ pub fn register_all(dispatcher: &mut Dispatcher, vault: Arc<Vault>) {
     dispatcher.register("get_dates", Arc::new(get_dates::GetDatesTool::new(vault.clone())));
     dispatcher.register("get_backlinks", Arc::new(get_backlinks::GetBacklinksTool::new(vault.clone())));
     dispatcher.register("get_outgoing_links", Arc::new(get_outgoing_links::GetOutgoingLinksTool::new(vault.clone())));
+    dispatcher.register("resolve_link", Arc::new(resolve_link::ResolveLinkTool::new(vault.clone())));
     #[cfg(feature = "git")]
     dispatcher.register("git_push", Arc::new(git_push::GitPushTool::new(vault.clone())));
     #[cfg(feature = "git")]

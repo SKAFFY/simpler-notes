@@ -27,6 +27,12 @@ pub struct ConcurrentIndex {
     pub file_states: DashMap<PathBuf, FileIndexState>,
 }
 
+impl Default for ConcurrentIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConcurrentIndex {
     pub fn new() -> Self {
         ConcurrentIndex {
