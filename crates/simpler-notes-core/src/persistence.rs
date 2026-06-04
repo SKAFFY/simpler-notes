@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs;
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDate;
 use crate::index::{ConcurrentIndex, TagEntry, DateEntry, LinkEntry};
 
-const INDEX_VERSION: u32 = 1;
+const INDEX_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]
 struct MetadataV1 {
@@ -34,11 +34,7 @@ impl ConcurrentIndex {
             serde_json::to_string_pretty(&dates).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
-        let mut links_map: std::collections::BTreeMap<PathBuf, Vec<LinkEntry>> = std::collections::BTreeMap::new();
-        for entry in self.links.iter() {
-            links_map.entry(entry.target.clone()).or_default().push(entry);
-        }
-        let links: Vec<(std::path::PathBuf, Vec<LinkEntry>)> = links_map.into_iter().collect();
+        let links: Vec<LinkEntry> = self.links.iter();
         fs::write(
             index_dir.join("links.json"),
             serde_json::to_string_pretty(&links).map_err(|e| e.to_string())?,
@@ -103,12 +99,10 @@ impl ConcurrentIndex {
         let links_path = index_dir.join("links.json");
         if links_path.exists() {
             let content = fs::read_to_string(&links_path).map_err(|e| e.to_string())?;
-            let data: Vec<(std::path::PathBuf, Vec<LinkEntry>)> =
+            let data: Vec<LinkEntry> =
                 serde_json::from_str(&content).map_err(|e| e.to_string())?;
-            for (_target, entries) in data {
-                for entry in entries {
-                    index.links.add(entry.source.clone(), entry);
-                }
+            for entry in data {
+                index.links.add(entry.source.clone(), entry);
             }
         }
 
