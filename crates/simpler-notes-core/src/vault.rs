@@ -519,7 +519,7 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        let backlinks = vault.get_backlinks(&PathBuf::from("b"));
+        let backlinks = vault.get_backlinks(&b_path);
         assert!(!backlinks.is_empty(), "Expected backlinks");
         assert_eq!(backlinks[0].source, a_path);
     }
@@ -538,7 +538,7 @@ mod tests {
         .unwrap();
         let outgoing = vault.get_outgoing_links(&a_path);
         assert!(!outgoing.is_empty(), "Expected outgoing links");
-        assert_eq!(outgoing[0].target, PathBuf::from("b"));
+        assert_eq!(outgoing[0].target, b_path);
     }
 
     #[test]
@@ -607,7 +607,7 @@ mod tests {
         .unwrap();
         let outgoing = vault.get_outgoing_links(&dir.path().join("sub/source.md"));
         assert_eq!(outgoing.len(), 1);
-        assert_eq!(outgoing[0].target, PathBuf::from("target"));
+        assert_eq!(outgoing[0].target, dir.path().join("target.md"));
     }
 
     #[test]
