@@ -1,12 +1,13 @@
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::diagnostics::Diagnostic;
 use crate::diagnostics::Diagnostics;
-use crate::index::ConcurrentIndex;
+use crate::index::{ConcurrentIndex, FileHashEntry};
 use crate::index::{DateEntry, LinkEntry, TagCompletion};
 use crate::search::SearchEngine;
 use chrono::NaiveDate;
@@ -106,6 +107,7 @@ impl Vault {
 
     fn reindex_all_internal(&self) -> Result<(), String> {
         let filename_index = self.build_filename_index();
+        let mut hashes = Vec::new();
 
         for entry in walkdir::WalkDir::new(&self.config.path)
             .into_iter()
@@ -125,10 +127,41 @@ impl Vault {
                 .map_err(|e| format!("Failed to read {:?}: {}", entry.path(), e))?;
             self.index
                 .reindex_file(entry.path(), &content, &self.config.path, &filename_index);
+
+            let rel_path = pathdiff::diff_paths(entry.path(), &self.config.path)
+                .unwrap_or_else(|| entry.path().to_path_buf());
+            if let Ok(meta) = std::fs::metadata(entry.path()) {
+                hashes.push(FileHashEntry {
+                    path: rel_path,
+                    inode: meta.ino(),
+                    size: meta.len(),
+                    mtime: meta.mtime() as u64,
+                });
+            }
         }
 
+        self.index.set_file_hashes(hashes);
         self.index.save(&self.config.path)?;
         Ok(())
+    }
+
+    fn update_file_hash(&self, full_path: &Path, rel_path: &Path) {
+        if let Ok(meta) = std::fs::metadata(full_path) {
+            let mut hashes = self.index.get_file_hashes();
+            if let Some(existing) = hashes.iter_mut().find(|h| h.path == rel_path) {
+                existing.inode = meta.ino();
+                existing.size = meta.len();
+                existing.mtime = meta.mtime() as u64;
+            } else {
+                hashes.push(FileHashEntry {
+                    path: rel_path.to_path_buf(),
+                    inode: meta.ino(),
+                    size: meta.len(),
+                    mtime: meta.mtime() as u64,
+                });
+            }
+            self.index.set_file_hashes(hashes);
+        }
     }
 
     pub fn list_md_files(&self) -> Vec<PathBuf> {
@@ -167,6 +200,7 @@ impl Vault {
         let filename_index = self.build_filename_index();
         self.index
             .reindex_file(&full_path, content, &self.config.path, &filename_index);
+        self.update_file_hash(&full_path, path);
         self.index.save(&self.config.path)?;
         Ok(())
     }
@@ -242,6 +276,89 @@ impl Vault {
 
     pub fn all_diagnostics(&self) -> Vec<(PathBuf, Vec<Diagnostic>)> {
         self.diagnostics().all()
+    }
+
+    pub fn rename_file(&self, from: &Path, to: &Path) -> Result<(), String> {
+        if !from.exists() {
+            return Err(format!("Source file does not exist: {:?}", from));
+        }
+
+        let backlink_entries: Vec<LinkEntry> = self.index.links.backlinks(from);
+
+        let _old_stem = from.file_stem()
+            .ok_or_else(|| "Invalid source filename".to_string())?
+            .to_string_lossy()
+            .to_string();
+        let new_stem = to.file_stem()
+            .ok_or_else(|| "Invalid target filename".to_string())?
+            .to_string_lossy()
+            .to_string();
+
+        let mut modified_sources: Vec<PathBuf> = Vec::new();
+        for entry in &backlink_entries {
+            let content = std::fs::read_to_string(&entry.source)
+                .map_err(|e| format!("Failed to read {:?}: {}", entry.source, e))?;
+
+            let span = &entry.span;
+            let before = &content[..span.offset];
+            let after = &content[span.offset + span.length..];
+            let new_content = format!("{}[[{}]]{}", before, new_stem, after);
+
+            std::fs::write(&entry.source, &new_content)
+                .map_err(|e| format!("Failed to write {:?}: {}", entry.source, e))?;
+
+            modified_sources.push(entry.source.clone());
+        }
+
+        std::fs::rename(from, to)
+            .map_err(|e| format!("Failed to rename {:?} to {:?}: {}", from, to, e))?;
+
+        self.index.links.update_target(from, to);
+        self.index.links.remove_file(from);
+
+        if let Ok(content) = std::fs::read_to_string(to) {
+            let filename_index = self.build_filename_index();
+            self.index.reindex_file(to, &content, &self.config.path, &filename_index);
+        }
+
+        let filename_index = self.build_filename_index();
+        for source in &modified_sources {
+            if let Ok(content) = std::fs::read_to_string(source) {
+                self.index.reindex_file(source, &content, &self.config.path, &filename_index);
+            }
+        }
+
+        // Update file hashes
+        let rel_from = pathdiff::diff_paths(from, &self.config.path)
+            .unwrap_or_else(|| from.to_path_buf());
+        let rel_to = pathdiff::diff_paths(to, &self.config.path)
+            .unwrap_or_else(|| to.to_path_buf());
+
+        let mut hashes = self.index.get_file_hashes();
+        hashes.retain(|h| h.path != rel_from);
+        if let Ok(meta) = std::fs::metadata(to) {
+            hashes.push(FileHashEntry {
+                path: rel_to,
+                inode: meta.ino(),
+                size: meta.len(),
+                mtime: meta.mtime() as u64,
+            });
+        }
+        for source in &modified_sources {
+            if let Some(rel) = pathdiff::diff_paths(source, &self.config.path) {
+                if let Ok(meta) = std::fs::metadata(source) {
+                    if let Some(existing) = hashes.iter_mut().find(|h| h.path == rel) {
+                        existing.inode = meta.ino();
+                        existing.size = meta.len();
+                        existing.mtime = meta.mtime() as u64;
+                    }
+                }
+            }
+        }
+        self.index.set_file_hashes(hashes);
+
+        self.index.save(&self.config.path)?;
+        Ok(())
     }
 
     /// Build a mapping from file_stem to full paths for all .md files in the vault.
@@ -519,7 +636,7 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        let backlinks = vault.get_backlinks(&PathBuf::from("b"));
+        let backlinks = vault.get_backlinks(&b_path);
         assert!(!backlinks.is_empty(), "Expected backlinks");
         assert_eq!(backlinks[0].source, a_path);
     }
@@ -538,7 +655,7 @@ mod tests {
         .unwrap();
         let outgoing = vault.get_outgoing_links(&a_path);
         assert!(!outgoing.is_empty(), "Expected outgoing links");
-        assert_eq!(outgoing[0].target, PathBuf::from("b"));
+        assert_eq!(outgoing[0].target, b_path);
     }
 
     #[test]
@@ -607,7 +724,7 @@ mod tests {
         .unwrap();
         let outgoing = vault.get_outgoing_links(&dir.path().join("sub/source.md"));
         assert_eq!(outgoing.len(), 1);
-        assert_eq!(outgoing[0].target, PathBuf::from("target"));
+        assert_eq!(outgoing[0].target, dir.path().join("target.md"));
     }
 
     #[test]
@@ -876,5 +993,69 @@ mod tests {
                 errors.join("; ")
             );
         }
+    }
+
+    #[test]
+    fn test_rename_file_refactors_backlinks() {
+        let dir = TempDir::new().unwrap();
+        let a_path = dir.path().join("a.md");
+        let b_path = dir.path().join("b.md");
+        std::fs::write(&a_path, "[[b]]").unwrap();
+        std::fs::write(&b_path, "content").unwrap();
+
+        let vault = Vault::open(VaultConfig {
+            path: dir.path().to_path_buf(),
+            ..Default::default()
+        }).unwrap();
+
+        let new_b_path = dir.path().join("renamed.md");
+        vault.rename_file(&b_path, &new_b_path).unwrap();
+
+        assert!(!b_path.exists(), "old file should not exist");
+        assert!(new_b_path.exists(), "new file should exist");
+
+        let a_content = vault.read_note(&PathBuf::from("a.md")).unwrap();
+        assert!(a_content.contains("[[renamed]]"), "link should be updated: {}", a_content);
+        assert!(!a_content.contains("[[b]]"), "old link should be removed");
+
+        let backlinks = vault.get_backlinks(&new_b_path);
+        assert!(!backlinks.is_empty(), "should have backlinks to renamed file");
+        assert_eq!(backlinks[0].source, a_path);
+    }
+
+    #[test]
+    fn test_rename_file_nonexistent_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let vault = Vault::open(VaultConfig {
+            path: dir.path().to_path_buf(),
+            ..Default::default()
+        }).unwrap();
+
+        let result = vault.rename_file(
+            &dir.path().join("nonexistent.md"),
+            &dir.path().join("still-nonexistent.md"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rename_file_updates_index() {
+        let dir = TempDir::new().unwrap();
+        let a_path = dir.path().join("a.md");
+        let b_path = dir.path().join("b.md");
+        std::fs::write(&a_path, "[[b]]").unwrap();
+        std::fs::write(&b_path, "content").unwrap();
+
+        let vault = Vault::open(VaultConfig {
+            path: dir.path().to_path_buf(),
+            ..Default::default()
+        }).unwrap();
+
+        let new_b_path = dir.path().join("renamed.md");
+        vault.rename_file(&b_path, &new_b_path).unwrap();
+
+        let outgoing = vault.get_outgoing_links(&a_path);
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(outgoing[0].target, new_b_path, "target should be new path");
     }
 }

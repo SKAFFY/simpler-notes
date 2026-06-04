@@ -46,6 +46,10 @@ impl Vault {
     /// Записать содержимое в файл.
     pub fn write_note(&self, path: &Path, content: &str) -> Result<(), String>;
 
+    /// Переименовать файл и выполнить refactoring [[ссылок]] во всех файлах,
+    /// которые ссылаются на старый путь. Не вызывает watcher-события переиндексации.
+    pub fn rename_file(&self, from: &Path, to: &Path) -> Result<(), String>;
+
     /// Все теги в индексе. Резерв: может использоваться для UI поиска по тегам
     /// (пустой фильтр → список всех тегов). Если не понадобится — удалить.
     pub fn get_all_tags(&self) -> Vec<String>;
@@ -83,7 +87,7 @@ impl Vault {
     /// Какие файлы ссылаются на target.
     pub fn get_backlinks(&self, target: &Path) -> Vec<LinkEntry>;
 
-    /// Куда ссылается source (поиск по backward, O(N)).
+    /// Куда ссылается source (поиск по by_source, O(1)).
     pub fn get_outgoing_links(&self, source: &Path) -> Vec<LinkEntry>;
 
     /// Разрешить плоское имя ссылки (file_stem) в полный путь к файлу.
@@ -126,12 +130,14 @@ for path in all_md_files {
 index.save(self.path);
 ```
 
+**На данный момент** vault всегда выполняет полный реиндекс при `open()`. Файл `file-hashes.json` сохраняется при каждом `save()`, но его данные пока не используются для оптимизации загрузки — это подготовка к будущему инкрементальному ребилду (см. [index-persistence.md](./index-persistence.md)).
+
 ### Инкрементальная (при сохранении файла)
 
-При `save_buffer()` вызывается `ConcurrentIndex::reindex_file()`:
+При `save_buffer()` вызывается `ConcurrentIndex::reindex_file()` с `filename_index`:
 
 ```rust
-pub fn reindex_file(&self, path: &Path, content: &str) {
+pub fn reindex_file(&self, path: &Path, content: &str, filename_index: &HashMap<String, Vec<PathBuf>>) {
     let parse_result = parse_content(content);
 
     // 1. Удалить старые записи для этого файла
@@ -161,15 +167,16 @@ pub fn reindex_file(&self, path: &Path, content: &str) {
             path.parent().unwrap_or(Path::new("")).join(&raw_target)
         };
         let normalized = normalize_path(&resolved);
-        let file_stem = normalized
-            .file_stem()
-            .unwrap_or(normalized.as_os_str())
-            .to_string_lossy()
-            .to_string();
-        let target = PathBuf::from(file_stem);
+        // Разрешаем в полный путь через filename_index:
+        //   - 1 совпадение → используем его
+        //   - 0 или >1 → используем normalized как fallback (сломанная/неоднозначная ссылка)
+        let target = filename_index
+            .get(&normalized.file_stem().unwrap_or_default().to_string_lossy().to_string())
+            .and_then(|paths| if paths.len() == 1 { Some(paths[0].clone()) } else { None })
+            .unwrap_or(normalized);
         let entry = LinkEntry {
             source: path.to_path_buf(),
-            target: target.clone(),
+            target,
             label: link_span.label.clone(),
             span: link_span.span,
         };
@@ -232,7 +239,8 @@ impl Vault {
         buf.save()?;
 
         // Переиндексация
-        self.index.reindex_file(&path, &buf.text);
+        let filename_index = self.build_filename_index();
+        self.index.reindex_file(&path, &buf.text, &filename_index);
 
         // Сохранить индекс на диск
         self.index.save(&self.path)?;

@@ -7,11 +7,20 @@ pub use date_index::*;
 pub use link_index::*;
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use crate::diagnostics::Diagnostics;
 use crate::note_model::ByteSpan;
 use crate::util::normalize_path;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileHashEntry {
+    pub path: PathBuf,
+    pub inode: u64,
+    pub size: u64,
+    pub mtime: u64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileIndexState {
@@ -25,6 +34,7 @@ pub struct ConcurrentIndex {
     pub links: LinkIndex,
     pub diagnostics: Diagnostics,
     pub file_states: DashMap<PathBuf, FileIndexState>,
+    pub file_hashes: Mutex<Vec<FileHashEntry>>,
 }
 
 impl Default for ConcurrentIndex {
@@ -41,6 +51,7 @@ impl ConcurrentIndex {
             links: LinkIndex::new(),
             diagnostics: Diagnostics::new(),
             file_states: DashMap::new(),
+            file_hashes: Mutex::new(Vec::new()),
         }
     }
 
@@ -50,6 +61,15 @@ impl ConcurrentIndex {
         self.links.clear();
         self.diagnostics.clear();
         self.file_states.clear();
+        *self.file_hashes.lock().unwrap() = Vec::new();
+    }
+
+    pub fn set_file_hashes(&self, hashes: Vec<FileHashEntry>) {
+        *self.file_hashes.lock().unwrap() = hashes;
+    }
+
+    pub fn get_file_hashes(&self) -> Vec<FileHashEntry> {
+        self.file_hashes.lock().unwrap().clone()
     }
 
     /// Reindex one file — parse, update all indexes, run diagnostics.
@@ -92,15 +112,23 @@ impl ConcurrentIndex {
                 path.parent().unwrap_or(Path::new("")).join(&raw_target)
             };
             let normalized = normalize_path(&resolved);
-            let flattened = normalized
+            let stem = normalized
                 .file_stem()
                 .unwrap_or(normalized.as_os_str())
                 .to_string_lossy()
                 .to_string();
-            let target = PathBuf::from(flattened);
+
+            // Resolve stem to full path via filename_index:
+            //   - 1 match → use that path (unambiguous)
+            //   - 0 or >1 → use normalized path as fallback (broken/ambiguous)
+            let target = filename_index
+                .get(&stem)
+                .and_then(|paths| if paths.len() == 1 { Some(paths[0].clone()) } else { None })
+                .unwrap_or(normalized);
+
             let entry = LinkEntry {
                 source: path.to_path_buf(),
-                target: target.clone(),
+                target,
                 label: link_span.label.clone(),
                 span: ByteSpan { offset: link_span.span.offset, length: link_span.span.length },
             };
@@ -228,8 +256,8 @@ mod tests {
                     let targets = idx.links.all_targets();
                     if targets.len() != 1 {
                         errors.push(format!("expected 1 target, got {}", targets.len()));
-                    } else if targets[0] != PathBuf::from("abs-test") {
-                        errors.push(format!("expected abs-test, got {:?}", targets[0]));
+                    } else if !targets[0].to_string_lossy().ends_with("abs-test") {
+                        errors.push(format!("expected path ending with abs-test, got {:?}", targets[0]));
                     }
                 },
             },
