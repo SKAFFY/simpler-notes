@@ -244,6 +244,60 @@ impl Vault {
         self.diagnostics().all()
     }
 
+    pub fn rename_file(&self, from: &Path, to: &Path) -> Result<(), String> {
+        if !from.exists() {
+            return Err(format!("Source file does not exist: {:?}", from));
+        }
+
+        let backlink_entries: Vec<LinkEntry> = self.index.links.backlinks(from);
+
+        let _old_stem = from.file_stem()
+            .ok_or_else(|| "Invalid source filename".to_string())?
+            .to_string_lossy()
+            .to_string();
+        let new_stem = to.file_stem()
+            .ok_or_else(|| "Invalid target filename".to_string())?
+            .to_string_lossy()
+            .to_string();
+
+        let mut modified_sources: Vec<PathBuf> = Vec::new();
+        for entry in &backlink_entries {
+            let content = std::fs::read_to_string(&entry.source)
+                .map_err(|e| format!("Failed to read {:?}: {}", entry.source, e))?;
+
+            let span = &entry.span;
+            let before = &content[..span.offset];
+            let after = &content[span.offset + span.length..];
+            let new_content = format!("{}[[{}]]{}", before, new_stem, after);
+
+            std::fs::write(&entry.source, &new_content)
+                .map_err(|e| format!("Failed to write {:?}: {}", entry.source, e))?;
+
+            modified_sources.push(entry.source.clone());
+        }
+
+        std::fs::rename(from, to)
+            .map_err(|e| format!("Failed to rename {:?} to {:?}: {}", from, to, e))?;
+
+        self.index.links.update_target(from, to);
+        self.index.links.remove_file(from);
+
+        if let Ok(content) = std::fs::read_to_string(to) {
+            let filename_index = self.build_filename_index();
+            self.index.reindex_file(to, &content, &self.config.path, &filename_index);
+        }
+
+        let filename_index = self.build_filename_index();
+        for source in &modified_sources {
+            if let Ok(content) = std::fs::read_to_string(source) {
+                self.index.reindex_file(source, &content, &self.config.path, &filename_index);
+            }
+        }
+
+        self.index.save(&self.config.path)?;
+        Ok(())
+    }
+
     /// Build a mapping from file_stem to full paths for all .md files in the vault.
     /// Used by diagnostics to detect ambiguous/broken links.
     pub fn build_filename_index(&self) -> HashMap<String, Vec<PathBuf>> {
@@ -876,5 +930,69 @@ mod tests {
                 errors.join("; ")
             );
         }
+    }
+
+    #[test]
+    fn test_rename_file_refactors_backlinks() {
+        let dir = TempDir::new().unwrap();
+        let a_path = dir.path().join("a.md");
+        let b_path = dir.path().join("b.md");
+        std::fs::write(&a_path, "[[b]]").unwrap();
+        std::fs::write(&b_path, "content").unwrap();
+
+        let vault = Vault::open(VaultConfig {
+            path: dir.path().to_path_buf(),
+            ..Default::default()
+        }).unwrap();
+
+        let new_b_path = dir.path().join("renamed.md");
+        vault.rename_file(&b_path, &new_b_path).unwrap();
+
+        assert!(!b_path.exists(), "old file should not exist");
+        assert!(new_b_path.exists(), "new file should exist");
+
+        let a_content = vault.read_note(&PathBuf::from("a.md")).unwrap();
+        assert!(a_content.contains("[[renamed]]"), "link should be updated: {}", a_content);
+        assert!(!a_content.contains("[[b]]"), "old link should be removed");
+
+        let backlinks = vault.get_backlinks(&new_b_path);
+        assert!(!backlinks.is_empty(), "should have backlinks to renamed file");
+        assert_eq!(backlinks[0].source, a_path);
+    }
+
+    #[test]
+    fn test_rename_file_nonexistent_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let vault = Vault::open(VaultConfig {
+            path: dir.path().to_path_buf(),
+            ..Default::default()
+        }).unwrap();
+
+        let result = vault.rename_file(
+            &dir.path().join("nonexistent.md"),
+            &dir.path().join("still-nonexistent.md"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rename_file_updates_index() {
+        let dir = TempDir::new().unwrap();
+        let a_path = dir.path().join("a.md");
+        let b_path = dir.path().join("b.md");
+        std::fs::write(&a_path, "[[b]]").unwrap();
+        std::fs::write(&b_path, "content").unwrap();
+
+        let vault = Vault::open(VaultConfig {
+            path: dir.path().to_path_buf(),
+            ..Default::default()
+        }).unwrap();
+
+        let new_b_path = dir.path().join("renamed.md");
+        vault.rename_file(&b_path, &new_b_path).unwrap();
+
+        let outgoing = vault.get_outgoing_links(&a_path);
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(outgoing[0].target, new_b_path, "target should be new path");
     }
 }
