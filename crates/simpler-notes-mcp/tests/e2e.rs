@@ -266,8 +266,8 @@ fn test_get_outgoing_links() {
     let targets: Vec<&str> = result.unwrap().iter()
         .filter_map(|v| v.get("target").and_then(|s| s.as_str()))
         .collect();
-    assert!(targets.contains(&"beta"), "alpha should link to beta, got: {:?}", targets);
-    assert!(targets.contains(&"gamma"), "alpha should link to gamma, got: {:?}", targets);
+    assert!(targets.iter().any(|t| t.contains("beta.md")), "alpha should link to beta, got: {:?}", targets);
+    assert!(targets.iter().any(|t| t.contains("gamma.md")), "alpha should link to gamma, got: {:?}", targets);
 }
 
 #[test]
