@@ -1,13 +1,14 @@
 mod transport;
+mod protocol;
+mod tool;
 mod dispatcher;
-mod types;
 mod tools;
 
 use std::env;
 use std::sync::Arc;
 use simpler_notes_core::vault::{Vault, VaultConfig};
 use crate::transport::McpTransport;
-use crate::types::JsonRpcRequest;
+use crate::protocol::JsonRpcRequest;
 use crate::dispatcher::Dispatcher;
 
 fn main() {
