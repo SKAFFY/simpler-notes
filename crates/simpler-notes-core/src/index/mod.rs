@@ -7,11 +7,20 @@ pub use date_index::*;
 pub use link_index::*;
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use crate::diagnostics::Diagnostics;
 use crate::note_model::ByteSpan;
 use crate::util::normalize_path;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileHashEntry {
+    pub path: PathBuf,
+    pub inode: u64,
+    pub size: u64,
+    pub mtime: u64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileIndexState {
@@ -25,6 +34,7 @@ pub struct ConcurrentIndex {
     pub links: LinkIndex,
     pub diagnostics: Diagnostics,
     pub file_states: DashMap<PathBuf, FileIndexState>,
+    pub file_hashes: Mutex<Vec<FileHashEntry>>,
 }
 
 impl Default for ConcurrentIndex {
@@ -41,6 +51,7 @@ impl ConcurrentIndex {
             links: LinkIndex::new(),
             diagnostics: Diagnostics::new(),
             file_states: DashMap::new(),
+            file_hashes: Mutex::new(Vec::new()),
         }
     }
 
@@ -50,6 +61,15 @@ impl ConcurrentIndex {
         self.links.clear();
         self.diagnostics.clear();
         self.file_states.clear();
+        *self.file_hashes.lock().unwrap() = Vec::new();
+    }
+
+    pub fn set_file_hashes(&self, hashes: Vec<FileHashEntry>) {
+        *self.file_hashes.lock().unwrap() = hashes;
+    }
+
+    pub fn get_file_hashes(&self) -> Vec<FileHashEntry> {
+        self.file_hashes.lock().unwrap().clone()
     }
 
     /// Reindex one file — parse, update all indexes, run diagnostics.

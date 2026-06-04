@@ -2,7 +2,7 @@ use std::path::Path;
 use std::fs;
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDate;
-use crate::index::{ConcurrentIndex, TagEntry, DateEntry, LinkEntry};
+use crate::index::{ConcurrentIndex, FileHashEntry, TagEntry, DateEntry, LinkEntry};
 
 const INDEX_VERSION: u32 = 2;
 
@@ -38,6 +38,12 @@ impl ConcurrentIndex {
         fs::write(
             index_dir.join("links.json"),
             serde_json::to_string_pretty(&links).map_err(|e| e.to_string())?,
+        ).map_err(|e| e.to_string())?;
+
+        let hashes = self.get_file_hashes();
+        fs::write(
+            index_dir.join("file-hashes.json"),
+            serde_json::to_string_pretty(&hashes).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
         let meta = MetadataV1 {
@@ -104,6 +110,14 @@ impl ConcurrentIndex {
             for entry in data {
                 index.links.add(entry.source.clone(), entry);
             }
+        }
+
+        let hashes_path = index_dir.join("file-hashes.json");
+        if hashes_path.exists() {
+            let content = fs::read_to_string(&hashes_path).map_err(|e| e.to_string())?;
+            let data: Vec<FileHashEntry> =
+                serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            index.set_file_hashes(data);
         }
 
         Ok(index)

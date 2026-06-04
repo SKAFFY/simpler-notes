@@ -130,6 +130,8 @@ for path in all_md_files {
 index.save(self.path);
 ```
 
+**На данный момент** vault всегда выполняет полный реиндекс при `open()`. Файл `file-hashes.json` сохраняется при каждом `save()`, но его данные пока не используются для оптимизации загрузки — это подготовка к будущему инкрементальному ребилду (см. [index-persistence.md](./index-persistence.md)).
+
 ### Инкрементальная (при сохранении файла)
 
 При `save_buffer()` вызывается `ConcurrentIndex::reindex_file()` с `filename_index`:

@@ -1,0 +1,110 @@
+[
+  {
+    "path": "notes/project.md",
+    "inode": 28587464,
+    "size": 62,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/note1.md",
+    "inode": 28587461,
+    "size": 76,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/note2.md",
+    "inode": 28587462,
+    "size": 59,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/sub/archive/old.md",
+    "inode": 28587467,
+    "size": 43,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/sub/subnote.md",
+    "inode": 28587468,
+    "size": 42,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/multi-links.md",
+    "inode": 28587449,
+    "size": 93,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/multiple-errors.md",
+    "inode": 28587460,
+    "size": 194,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/circ-b.md",
+    "inode": 28587455,
+    "size": 90,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/invalid-date.md",
+    "inode": 28587459,
+    "size": 65,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/broken-link.md",
+    "inode": 28587453,
+    "size": 100,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/duplicate/a.md",
+    "inode": 28587457,
+    "size": 109,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/ambiguous-source.md",
+    "inode": 28587452,
+    "size": 131,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/a.md",
+    "inode": 28587451,
+    "size": 101,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/empty-link.md",
+    "inode": 28587458,
+    "size": 99,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/negatives/circ-a.md",
+    "inode": 28587454,
+    "size": 90,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/note3.md",
+    "inode": 28587463,
+    "size": 48,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/mcp-test.md",
+    "inode": 28587448,
+    "size": 31,
+    "mtime": 1780394605
+  },
+  {
+    "path": "notes/broken-link-test.md",
+    "inode": 28587447,
+    "size": 20,
+    "mtime": 1780394605
+  }
+]

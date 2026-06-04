@@ -1,12 +1,13 @@
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::diagnostics::Diagnostic;
 use crate::diagnostics::Diagnostics;
-use crate::index::ConcurrentIndex;
+use crate::index::{ConcurrentIndex, FileHashEntry};
 use crate::index::{DateEntry, LinkEntry, TagCompletion};
 use crate::search::SearchEngine;
 use chrono::NaiveDate;
@@ -106,6 +107,7 @@ impl Vault {
 
     fn reindex_all_internal(&self) -> Result<(), String> {
         let filename_index = self.build_filename_index();
+        let mut hashes = Vec::new();
 
         for entry in walkdir::WalkDir::new(&self.config.path)
             .into_iter()
@@ -125,10 +127,41 @@ impl Vault {
                 .map_err(|e| format!("Failed to read {:?}: {}", entry.path(), e))?;
             self.index
                 .reindex_file(entry.path(), &content, &self.config.path, &filename_index);
+
+            let rel_path = pathdiff::diff_paths(entry.path(), &self.config.path)
+                .unwrap_or_else(|| entry.path().to_path_buf());
+            if let Ok(meta) = std::fs::metadata(entry.path()) {
+                hashes.push(FileHashEntry {
+                    path: rel_path,
+                    inode: meta.ino(),
+                    size: meta.len(),
+                    mtime: meta.mtime() as u64,
+                });
+            }
         }
 
+        self.index.set_file_hashes(hashes);
         self.index.save(&self.config.path)?;
         Ok(())
+    }
+
+    fn update_file_hash(&self, full_path: &Path, rel_path: &Path) {
+        if let Ok(meta) = std::fs::metadata(full_path) {
+            let mut hashes = self.index.get_file_hashes();
+            if let Some(existing) = hashes.iter_mut().find(|h| h.path == rel_path) {
+                existing.inode = meta.ino();
+                existing.size = meta.len();
+                existing.mtime = meta.mtime() as u64;
+            } else {
+                hashes.push(FileHashEntry {
+                    path: rel_path.to_path_buf(),
+                    inode: meta.ino(),
+                    size: meta.len(),
+                    mtime: meta.mtime() as u64,
+                });
+            }
+            self.index.set_file_hashes(hashes);
+        }
     }
 
     pub fn list_md_files(&self) -> Vec<PathBuf> {
@@ -167,6 +200,7 @@ impl Vault {
         let filename_index = self.build_filename_index();
         self.index
             .reindex_file(&full_path, content, &self.config.path, &filename_index);
+        self.update_file_hash(&full_path, path);
         self.index.save(&self.config.path)?;
         Ok(())
     }
@@ -293,6 +327,35 @@ impl Vault {
                 self.index.reindex_file(source, &content, &self.config.path, &filename_index);
             }
         }
+
+        // Update file hashes
+        let rel_from = pathdiff::diff_paths(from, &self.config.path)
+            .unwrap_or_else(|| from.to_path_buf());
+        let rel_to = pathdiff::diff_paths(to, &self.config.path)
+            .unwrap_or_else(|| to.to_path_buf());
+
+        let mut hashes = self.index.get_file_hashes();
+        hashes.retain(|h| h.path != rel_from);
+        if let Ok(meta) = std::fs::metadata(to) {
+            hashes.push(FileHashEntry {
+                path: rel_to,
+                inode: meta.ino(),
+                size: meta.len(),
+                mtime: meta.mtime() as u64,
+            });
+        }
+        for source in &modified_sources {
+            if let Some(rel) = pathdiff::diff_paths(source, &self.config.path) {
+                if let Ok(meta) = std::fs::metadata(source) {
+                    if let Some(existing) = hashes.iter_mut().find(|h| h.path == rel) {
+                        existing.inode = meta.ino();
+                        existing.size = meta.len();
+                        existing.mtime = meta.mtime() as u64;
+                    }
+                }
+            }
+        }
+        self.index.set_file_hashes(hashes);
 
         self.index.save(&self.config.path)?;
         Ok(())
