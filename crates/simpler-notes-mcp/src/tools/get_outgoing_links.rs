@@ -1,34 +1,34 @@
 use std::sync::Arc;
 use serde_json::{json, Value};
 use simpler_notes_core::vault::Vault;
-use crate::dispatcher::Tool;
+use crate::tool::{GenericTool, ToolHandler, ToolResult, InputSchema, ParamDef};
 
-pub struct GetOutgoingLinksTool {
-    vault: Arc<Vault>,
+pub(crate) fn handler(vault: &Vault, params: Option<Value>) -> ToolResult {
+    let p = params.ok_or((-32602, "Missing parameters".to_string()))?;
+    let path = p.get("path")
+        .and_then(|v| v.as_str())
+        .ok_or((-32602, "Missing required parameter: path".to_string()))?;
+
+    let source = vault.config.path.join(path);
+    let outgoing = vault.get_outgoing_links(&source);
+    let items: Vec<Value> = outgoing.into_iter().map(|e| {
+        json!({
+            "source": e.source.to_string_lossy(),
+            "target": e.target.to_string_lossy(),
+            "label": e.label,
+        })
+    }).collect();
+    Ok(json!(items))
 }
 
-impl GetOutgoingLinksTool {
-    pub fn new(vault: Arc<Vault>) -> Self {
-        GetOutgoingLinksTool { vault }
-    }
-}
-
-impl Tool for GetOutgoingLinksTool {
-    fn call(&self, params: Option<Value>) -> Result<Value, (i32, String)> {
-        let p = params.ok_or((-32602, "Missing parameters".to_string()))?;
-        let path = p.get("path")
-            .and_then(|v| v.as_str())
-            .ok_or((-32602, "Missing required parameter: path".to_string()))?;
-        // Sources are stored as full paths, resolve relative to vault root
-        let source = self.vault.config.path.join(path);
-        let outgoing = self.vault.get_outgoing_links(&source);
-        let items: Vec<Value> = outgoing.into_iter().map(|e| {
-            json!({
-                "source": e.source.to_string_lossy(),
-                "target": e.target.to_string_lossy(),
-                "label": e.label,
-            })
-        }).collect();
-        Ok(json!(items))
+pub(crate) fn tool(vault: Arc<Vault>) -> GenericTool {
+    GenericTool {
+        vault,
+        handler: handler as ToolHandler,
+        name: "get_outgoing_links",
+        description: "Get all wiki-links from a given note to other notes",
+        input: InputSchema::new(&[
+            ParamDef { name: "path", description: "Path to the source note", required: true },
+        ]),
     }
 }

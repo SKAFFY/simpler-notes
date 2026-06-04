@@ -1,19 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde_json::{json, Value};
+use serde_json::json;
 
-use crate::types::{JsonRpcRequest, JsonRpcResponse, ToolDescription, ContentItem};
-
-pub type ToolResult = Result<Value, (i32, String)>;
-
-pub struct ToolInfo {
-    pub description: String,
-    pub input_schema: Value,
-}
-
-pub trait Tool: Send + Sync {
-    fn call(&self, params: Option<Value>) -> ToolResult;
-}
+use crate::protocol::{ContentItem, JsonRpcRequest, JsonRpcResponse, ToolDescription};
+use crate::tool::{GenericTool, Tool, ToolInfo};
 
 pub struct Dispatcher {
     tools: HashMap<String, (Arc<dyn Tool>, ToolInfo)>,
@@ -29,15 +19,24 @@ impl Dispatcher {
         }
     }
 
+    #[allow(dead_code)]
     pub fn register(&mut self, name: &str, tool: Arc<dyn Tool>, info: ToolInfo) {
         self.tools.insert(name.to_string(), (tool, info));
+    }
+
+    pub fn register_generic(&mut self, tool: GenericTool) {
+        let name = tool.name.to_string();
+        let info = ToolInfo {
+            description: tool.description.to_string(),
+            input_schema: tool.input.to_json_schema(),
+        };
+        self.tools.insert(name, (Arc::new(tool), info));
     }
 
     pub fn handle_jsonrpc(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
         let method = &request.method;
         let id = request.id;
 
-        // notifications have no id — no response expected
         if id.is_none() {
             if method == "notifications/initialized" {
                 self.initialized = true;
@@ -156,7 +155,8 @@ impl Dispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use serde_json::{json, Value};
+    use crate::tool::ToolResult;
 
     struct MockTool {
         expected_params: Option<Value>,

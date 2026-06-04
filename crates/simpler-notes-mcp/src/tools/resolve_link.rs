@@ -1,27 +1,27 @@
 use std::sync::Arc;
 use serde_json::{json, Value};
 use simpler_notes_core::vault::Vault;
-use crate::dispatcher::Tool;
+use crate::tool::{GenericTool, ToolHandler, ToolResult, InputSchema, ParamDef};
 
-pub struct ResolveLinkTool {
-    vault: Arc<Vault>,
-}
-
-impl ResolveLinkTool {
-    pub fn new(vault: Arc<Vault>) -> Self {
-        ResolveLinkTool { vault }
+pub(crate) fn handler(vault: &Vault, params: Option<Value>) -> ToolResult {
+    let p = params.ok_or((-32602, "Missing parameters".to_string()))?;
+    let target = p.get("target")
+        .and_then(|v| v.as_str())
+        .ok_or((-32602, "Missing required parameter: target".to_string()))?;
+    match vault.resolve_link(target) {
+        Ok(path) => Ok(json!({"path": path.to_string_lossy()})),
+        Err(e) => Err((-32000, e)),
     }
 }
 
-impl Tool for ResolveLinkTool {
-    fn call(&self, params: Option<Value>) -> Result<Value, (i32, String)> {
-        let p = params.ok_or((-32602, "Missing parameters".to_string()))?;
-        let target = p.get("target")
-            .and_then(|v| v.as_str())
-            .ok_or((-32602, "Missing required parameter: target".to_string()))?;
-        match self.vault.resolve_link(target) {
-            Ok(path) => Ok(json!({"path": path.to_string_lossy()})),
-            Err(e) => Err((-32000, e)),
-        }
+pub(crate) fn tool(vault: Arc<Vault>) -> GenericTool {
+    GenericTool {
+        vault,
+        handler: handler as ToolHandler,
+        name: "resolve_link",
+        description: "Resolve a [[wiki-link]] target to an actual file path",
+        input: InputSchema::new(&[
+            ParamDef { name: "target", description: "Link target (e.g. note name without extension)", required: true },
+        ]),
     }
 }
