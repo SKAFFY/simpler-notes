@@ -117,14 +117,14 @@ pub struct ConcurrentIndex { /* tags, dates, links, diagnostics, file_states */ 
 - `new()`, `add(path, date, span)`, `remove(path, date)`, `get(date)`, `get_range(from, to)`, `all_dates()`, `clear()`
 
 Методы `LinkIndex`:
-- `new()`, `add(source, entry)`, `remove_file(path)`, `backlinks(target)`, `outgoing(source)`, `clear()`
+- `new()`, `add(source, entry)`, `remove_file(path)`, `backlinks(target)` (O(1)), `outgoing(source)` (O(1)), `update_target(old, new)`, `clear()`
 
 ```rust
 pub struct LinkEntry {
-    pub source: PathBuf,     // откуда ссылка
-    pub target: PathBuf,     // куда ссылка (file_stem, без .md, без пути)
+    pub source: PathBuf,     // полный путь к файлу-источнику
+    pub target: PathBuf,     // полный путь к файлу-цели (resolved)
     pub label: String,       // отображаемый текст
-    pub span: ByteSpan,
+    pub span: ByteSpan,      // позиция в исходном файле
 }
 ```
 
@@ -160,6 +160,7 @@ impl Vault {
     pub fn search(&self, query: &str) -> Result<Vec<SearchResult>, String>;
     pub fn read_note(&self, path: &Path) -> Result<String, String>;
     pub fn write_note(&self, path: &Path, content: &str) -> Result<(), String>;
+    pub fn rename_file(&self, from: &Path, to: &Path) -> Result<(), String>;   // переименование + refactoring ссылок
     // Reserved for future UI (список всех тегов)
     pub fn get_all_tags(&self) -> Vec<String>;
     pub fn get_dates_in_range(&self, from: NaiveDate, to: NaiveDate) -> Vec<(NaiveDate, Vec<DateEntry>)>;

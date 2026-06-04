@@ -132,6 +132,27 @@
 {"ok": true}
 ```
 
+### `rename_file`
+
+Переименование файла с refactoring всех [[ссылок]] на него в vault'е.
+
+**Arguments:**
+```json
+{"from": "notes/old_name.md", "to": "notes/new_name.md"}
+```
+
+**Result:**
+```json
+{"ok": true}
+```
+
+**Поведение:**
+1. Собирает все файлы, ссылающиеся на `from` (через `backlinks`)
+2. В каждом таком файле заменяет `[[old_stem]]` → `[[new_stem]]` через span'ы
+3. Перемещает файл на диске
+4. Переиндексирует все изменённые файлы
+5. Сохраняет индекс
+
 ### `list_notes`
 
 Дерево файлов в vault.
@@ -287,12 +308,12 @@ Pull из remote.
 **Result:**
 ```json
 [
-  {"source": "notes/reference.md", "target": "project", "label": "My Project"},
-  {"source": "notes/index.md", "target": "project", "label": "project"}
+  {"source": "notes/reference.md", "target": "notes/project.md", "label": "My Project"},
+  {"source": "notes/index.md", "target": "notes/project.md", "label": "project"}
 ]
 ```
 
-`target` — плоское имя файла (file_stem) без расширения и без пути.
+`target` — полный путь к файлу внутри vault.
 
 ### `resolve_link`
 
@@ -330,7 +351,7 @@ Pull из remote.
 **Result:**
 ```json
 [
-  {"source": "notes/source.md", "target": "project", "label": "My Project"},
-  {"source": "notes/source.md", "target": "todo", "label": "todo"}
+  {"source": "notes/source.md", "target": "notes/project.md", "label": "My Project"},
+  {"source": "notes/source.md", "target": "notes/todo.md", "label": "todo"}
 ]
 ```

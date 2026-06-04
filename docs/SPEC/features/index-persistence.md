@@ -50,17 +50,18 @@ depends: [tag-index, date-index, link-index]
 
 ```json
 [
-  ["notes/meeting.md", [{"source": "notes/project.md", "target": "notes/meeting.md", "label": "Meeting", "span": {"offset": 10, "length": 18}}]],
-  ["notes/ideas.md",   [{"source": "notes/project.md", "target": "notes/ideas.md", "label": "Ideas", "span": {"offset": 40, "length": 15}}]]
+  {"source": "notes/project.md", "target": "notes/meeting.md", "label": "Meeting", "span": {"offset": 10, "length": 18}},
+  {"source": "notes/project.md", "target": "notes/ideas.md", "label": "Ideas", "span": {"offset": 40, "length": 15}}
 ]
 ```
 
-Формат: массив пар `[target, [LinkEntry]]`. Каждый `LinkEntry` — объект с source, target, label и ByteSpan.
+Формат: плоский массив `LinkEntry`. Каждый `LinkEntry` — объект с source (полный путь), target (полный путь), label и ByteSpan.
+Ранее хранилось как `Vec<(PathBuf, Vec<LinkEntry>)>` (группировка по target), теперь плоский список для упрощения save/load.
 
 ### metadata.json
 
 ```json
-{"version": 1, "last_rebuild": "2026-05-31T12:00:00Z"}
+{"version": 2, "last_rebuild": "2026-05-31T12:00:00Z"}
 ```
 
 ## API
@@ -78,7 +79,7 @@ impl ConcurrentIndex {
 1. Создать `.index/` если не существует
 2. Сериализовать TagIndex в `tags.json` (Vec<(String, Vec<TagEntry>)>)
 3. Сериализовать DateIndex в `dates.json` (Vec<(NaiveDate, Vec<DateEntry>)>)
-4. Сериализовать LinkIndex в `links.json` (Vec<(PathBuf, Vec<LinkEntry>)>)
+4. Сериализовать LinkIndex в `links.json` (flat Vec<LinkEntry>)
 5. Записать `metadata.json`
 
 **Загрузка:**

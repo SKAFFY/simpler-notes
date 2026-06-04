@@ -8,94 +8,158 @@ depends: [parser]
 
 # Link Index
 
-Индекс обратных ссылок между заметками (`[[note]]`). Позволяет узнать, какие файлы ссылаются на target (backlinks) и куда ссылается source (outgoing). Работает аналогично TagIndex и DateIndex.
+Индекс связей между заметками (`[[wiki-link]]`). Позволяет узнать, какие файлы ссылаются на target (backlinks), куда ссылается source (outgoing), и поддерживает rename refactoring.
 
 ## Структура
 
 ```rust
-use std::path::PathBuf;
-use dashmap::DashMap;
-
 pub struct LinkIndex {
-    /// backward: target → [ссылки на этот файл]
-    backward: DashMap<PathBuf, Vec<LinkEntry>>,
+    /// Полный путь цели → обратные ссылки (O(1) для backlinks)
+    by_target: DashMap<PathBuf, Vec<LinkEntry>>,
+    /// Полный путь источника → исходящие ссылки (O(1) для outgoing)
+    by_source: DashMap<PathBuf, Vec<LinkEntry>>,
 }
 
 pub struct LinkEntry {
-    pub source: PathBuf,     // откуда ссылка
-    pub target: PathBuf,     // куда ссылка (только имя файла, file_stem, без расширения и без пути)
-    pub label: String,       // отображаемый текст
+    pub source: PathBuf,     // полный путь к файлу-источнику
+    pub target: PathBuf,     // полный путь к файлу-цели (resolved)
+    pub label: String,       // отображаемый текст ссылки
     pub span: ByteSpan,      // позиция в исходном файле
 }
 ```
 
-Ключ: **target** — имя файла (file_stem без расширения), на который ссылаются (PathBuf).
-Значение: список `LinkEntry` — все файлы, которые ссылаются на target + их позиции.
+Две мапы: `by_target` — для обратных ссылок, `by_source` — для исходящих. Обе O(1).
 
-Forward-связи (source → target) не хранятся в индексе — их можно получить через `parse_content()` для каждого открытого файла при необходимости.
+`LinkEntry.target` — это полный путь к файлу, на который ссылаются (не stem!). При индексации происходит резолв через `filename_index`.
 
 ## API
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|----------|
-| `add` | `(&self, source: PathBuf, entry: LinkEntry)` | Добавить одну ссылку (source → target) |
-| `remove_file` | `(&self, path: &Path)` | Удалить все ссылки, где source == path |
-| `backlinks` | `(&self, target: &Path) -> Vec<LinkEntry>` | Какие файлы ссылаются на target |
-| `outgoing` | `(&self, source: &Path) -> Vec<LinkEntry>` | Куда ссылается source (через backward lookup — по всем записям, где source передан) |
-| `clear` | `(&self)` | Очистить индекс |
+| `add` | `(&self, source: PathBuf, entry: LinkEntry)` | Добавить entry в обе мапы |
+| `remove_file` | `(&self, path: &Path)` | Удалить все entry с source == path из обеих мап |
+| `backlinks` | `(&self, target: &Path) -> Vec<LinkEntry>` | Кто ссылается на файл — O(1) |
+| `outgoing` | `(&self, source: &Path) -> Vec<LinkEntry>` | Куда ссылается файл — O(1) |
+| `update_target` | `(&self, old: &Path, new: &Path)` | Перенести ключ в by_target и обновить entry.target |
+| `all_targets` | `(&self) -> Vec<PathBuf>` | Все уникальные target пути (для autocomplete) |
+| `clear` | `(&self)` | Очистить обе мапы |
 
 ### add
 
-Добавляет запись backward: `target → { source, label, span }`.
+```rust
+pub fn add(&self, _source: PathBuf, entry: LinkEntry) {
+    self.by_target.entry(entry.target.clone()).or_default().push(entry.clone());
+    self.by_source.entry(entry.source.clone()).or_default().push(entry);
+}
+```
 
 ### remove_file
 
-Удаляет все записи backward, где `source == path`. Используется при переиндексации файла.
+Удаляет все записи, где `source == path`, из обеих мап. После удаления чистит пустые ключи.
 
-### outgoing
+### update_target
 
-`outgoing()` проходится по всему backward и собирает записи, где `source == path`. Это неэффективно для большого индекса, но forward не дублируется (прямые ссылки можно получить через `parse_content()`).
+При rename файла — переносит ключ в `by_target` и обновляет `entry.target` у всех записей:
+
+```rust
+pub fn update_target(&self, old: &Path, new: &Path) {
+    if let Some((_, entries)) = self.by_target.remove(old) {
+        for mut entry in entries {
+            entry.target = new.to_path_buf();
+            self.by_target.entry(new.to_path_buf()).or_default().push(entry);
+        }
+    }
+}
+```
 
 ## Индексация
 
 При парсинге файла (в `reindex_file()`):
 
-```rust
-// 1. Удалить старые ссылки из этого файла
-index.links.remove_file(path);
+1. Удалить старые ссылки из этого файла: `index.links.remove_file(path)`
+2. Для каждой распарсенной ссылки:
+   - Взять `link_span.file_name` (raw target из `[[...]]`)
+   - Зарезолвить относительный путь относительно папки source-файла
+   - Нормализовать (`normalize_path`)
+   - Извлечь file_stem
+   - Попытаться зарезолвить stem в полный путь через `filename_index`:
+     - `[path]` → используем этот путь (unambiguous)
+     - `[]` или `[a, b, ...]` → используем нормализованный путь как fallback
+   - Создать `LinkEntry` с resolved `target`
+   - Вызвать `index.links.add(source_path, entry)`
+3. Запустить диагностику (`check_file`)
 
-// 2. Добавить новые
-for link_span in parse_result.links {
-    let raw_target = PathBuf::from(&link_span.file_name);
-    let resolved = if raw_target.is_absolute() {
-        raw_target
-    } else {
-        path.parent().unwrap_or(Path::new("")).join(&raw_target)
-    };
+```rust
+for link_span in &result.links {
+    let raw = PathBuf::from(&link_span.file_name);
+    let resolved = if raw.is_absolute() { raw }
+        else { path.parent().unwrap_or(Path::new("")).join(&raw) };
     let normalized = normalize_path(&resolved);
-    let file_stem = normalized
-        .file_stem()
+    let stem = normalized.file_stem()
         .unwrap_or(normalized.as_os_str())
-        .to_string_lossy()
-        .to_string();
-    let target = PathBuf::from(file_stem);
+        .to_string_lossy().to_string();
+
+    let full_target = match filename_index.get(&stem) {
+        Some(paths) if paths.len() == 1 => paths[0].clone(),
+        _ => normalized,
+    };
+
     let entry = LinkEntry {
         source: path.to_path_buf(),
-        target: target.clone(),
+        target: full_target,
         label: link_span.label.clone(),
-        span: link_span.span,
+        span: ByteSpan { offset: link_span.span.offset, length: link_span.span.length },
     };
-    index.links.add(path.to_path_buf(), entry);
+    self.links.add(path.to_path_buf(), entry);
 }
 ```
 
-`target` всегда сохраняется как плоское имя файла (file_stem) без расширения, без пути. Относительные пути (`../note`, `sub/file.md`) резолвятся и нормализуются до чистого имени файла.
+## Rename refactoring
+
+`Vault::rename_file(old_rel, new_rel)` — полный rename файла с переписыванием ссылок:
+
+1. Получить все файлы, ссылающиеся на `old_path`: `links.backlinks(&old_path)`
+2. Для каждого такого файла: прочитать содержимое, заменить `[[old_stem]]` → `[[new_stem]]` через span'ы в LinkEntry, записать обратно
+3. Переместить файл: `std::fs::rename(&old_path, &new_path)`
+4. Обновить индекс:
+   - `links.update_target(&old_path, &new_path)` — перенести ключ в by_target
+   - `links.remove_file(&old_path)` — убрать source-записи старого пути
+   - `reindex_file(new_path)` — переиндексировать renamed-файл
+   - Для каждого изменённого файла: `reindex_file(source)` — переиндексировать
+5. Сохранить индекс на диск
+
+## Персистентность
+
+Формат `links.json` — плоский `Vec<LinkEntry>`. Версия индекса: INDEX_VERSION = 2.
+
+```rust
+// save
+let entries: Vec<LinkEntry> = self.by_source.iter()
+    .flat_map(|e| e.value().iter().cloned())
+    .collect();
+serde_json::to_string_pretty(&entries)
+
+// load
+for entry in entries {
+    index.links.add(entry.source.clone(), entry);
+}
+```
+
+Миграция со старого формата не поддерживается — при несовпадении версии индекса происходит полная переиндексация.
+
+## Взаимодействие с Watcher
+
+При ручном rename через Finder/Terminal watcher видит `Remove(old) + Create(new)`. Refactoring ссылок не происходит — это conscious action пользователя через GUI или MCP. Watcher корректно обновляет индекс для Create/Modify, а Remove чистит старые записи.
 
 ## Конкурентность
 
-Аналогично TagIndex — `DashMap`, можно читать и писать одновременно.
+`DashMap` для обеих мап, можно читать и писать одновременно.
 
-## Ограничения
+## Изменения в зависимых компонентах
 
-- `outgoing()` — линейный проход по всему backward (O(N)). Для графа связей используется `backlinks()` (O(1)). Если в будущем нужен быстрый outgoing — добавить forward-индекс.
-- Ссылка на несуществующий файл (broken link) — не валидируется, просто хранится в индексе.
+| Компонент | Изменение |
+|-----------|-----------|
+| `vault.rs` | `get_backlinks` — без изменений. `get_outgoing_links` — теперь O(1). `autocomplete_links` — `all_targets()` возвращает `PathBuf` (полные пути), фильтр по file_stem. |
+| `search.rs` | Поиск `link:<target>` — использует `backlinks`, без изменений. |
+| `mcp/get_backlinks.rs` | target в ответе — полный путь, не stem. |
+| `mcp/get_outgoing_links.rs` | target в ответе — полный путь, не stem. |
