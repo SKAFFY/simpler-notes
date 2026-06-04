@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::sync::LazyLock;
 use regex::Regex;
 use chrono::NaiveDate;
 use crate::note_model::ByteSpan;
@@ -44,6 +44,25 @@ pub struct ParseResult {
     pub errors: Vec<ParseError>,
 }
 
+static RE_LINK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\[\[(.*?)(?:\|(.*?))?\]\]").unwrap()
+});
+static RE_COMMENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"<!--.*?-->").unwrap()
+});
+static RE_INLINE_CODE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"`([^`]*)`").unwrap()
+});
+static RE_MD_LINK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"!?\[([^\[\]]*)\]\([^)]*\)").unwrap()
+});
+static RE_TAG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?m:^|\s)@([a-zA-Zа-яА-Я0-9_\-]+)").unwrap()
+});
+static RE_DATE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?m:^|\s)!(\d{2})\.(\d{2})\.(\d{4})\b").unwrap()
+});
+
 /// Parse markdown content extracting [[wiki-links]], @tags, and !dates.
 ///
 /// Tags and dates inside MD constructs (code blocks, links, comments, etc.)
@@ -52,21 +71,23 @@ pub fn parse_content(text: &str) -> ParseResult {
     let mut errors = Vec::new();
     let links = parse_links(text, &mut errors);
 
-    let wiki_spans: Vec<Range<usize>> = links.iter()
-        .map(|l| l.span.offset..(l.span.offset + l.span.length))
-        .collect();
-    let masked_ranges = build_masked_ranges(text, &wiki_spans);
+    let mut mask = build_masked_mask(text);
 
-    let tags = parse_tags(text, &masked_ranges);
-    let dates = parse_dates(text, &masked_ranges, &mut errors);
+    for link in &links {
+        for bit in mask[link.span.offset..(link.span.offset + link.span.length)].iter_mut() {
+            *bit = true;
+        }
+    }
+
+    let tags = parse_tags(text, &mask);
+    let dates = parse_dates(text, &mask, &mut errors);
     ParseResult { links, tags, dates, errors }
 }
 
 fn parse_links(text: &str, errors: &mut Vec<ParseError>) -> Vec<LinkSpan> {
-    let re = Regex::new(r"\[\[(.*?)(?:\|(.*?))?\]\]").unwrap();
     let mut links = Vec::new();
 
-    for cap in re.captures_iter(text) {
+    for cap in RE_LINK.captures_iter(text) {
         let m = cap.get(0).unwrap();
         let span = ByteSpan { offset: m.start(), length: m.end() - m.start() };
         let inner = cap.get(1).map_or("", |m| m.as_str());
@@ -109,11 +130,10 @@ fn find_closing_fence(lines: &[&str], start: usize, fc: char, fence_len: usize) 
     lines.len()
 }
 
-fn build_masked_ranges(text: &str, extra_ranges: &[Range<usize>]) -> Vec<Range<usize>> {
-    let mut ranges: Vec<Range<usize>> = Vec::new();
+fn build_masked_mask(text: &str) -> Vec<bool> {
+    let mut mask = vec![false; text.len()];
 
     // Fenced code blocks ```...``` and ~~~...~~~
-    // Manual scan — regex crate doesn't support backreferences.
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
     while i < lines.len() {
@@ -131,9 +151,10 @@ fn build_masked_ranges(text: &str, extra_ranges: &[Range<usize>]) -> Vec<Range<u
             let end_idx = find_closing_fence(&lines, i, fc, flen);
             let end_line = if end_idx < lines.len() { end_idx + 1 } else { lines.len() };
             let block_end = lines[..end_line].iter().map(|l| l.len() + 1).sum::<usize>();
-            // subtract 1 for the trailing newline counted above if text doesn't end with \n
             let block_len = block_end.saturating_sub(line_start).saturating_sub(1).max(1);
-            ranges.push(line_start..(line_start + block_len));
+            for bit in mask[line_start..(line_start + block_len)].iter_mut() {
+                *bit = true;
+            }
             i = end_line;
             continue;
         }
@@ -141,63 +162,38 @@ fn build_masked_ranges(text: &str, extra_ranges: &[Range<usize>]) -> Vec<Range<u
     }
 
     // HTML comments <!-- ... -->
-    let comment_re = Regex::new(r"<!--.*?-->").unwrap();
-    for m in comment_re.find_iter(text) {
-        ranges.push(m.start()..m.end());
-    }
-
-    // Inline code `...` (single backtick pairs)
-    let inline_re = Regex::new(r"`([^`]*)`").unwrap();
-    for m in inline_re.find_iter(text) {
-        ranges.push(m.start()..m.end());
-    }
-
-    // MD links [...](...) and images ![alt](...)
-    let md_link_re = Regex::new(r"!?\[([^\[\]]*)\]\([^)]*\)").unwrap();
-    for m in md_link_re.find_iter(text) {
-        ranges.push(m.start()..m.end());
-    }
-
-    ranges.extend_from_slice(extra_ranges);
-
-    // Sort and merge overlapping ranges
-    ranges.sort_by_key(|r| r.start);
-    let mut merged: Vec<Range<usize>> = Vec::new();
-    for r in ranges {
-        if let Some(last) = merged.last_mut() {
-            if r.start <= last.end {
-                last.end = last.end.max(r.end);
-                continue;
-            }
+    for m in RE_COMMENT.find_iter(text) {
+        for bit in mask[m.start()..m.end()].iter_mut() {
+            *bit = true;
         }
-        merged.push(r);
     }
 
-    merged
+    // Inline code `...`
+    for m in RE_INLINE_CODE.find_iter(text) {
+        for bit in mask[m.start()..m.end()].iter_mut() {
+            *bit = true;
+        }
+    }
+
+    // MD links and images
+    for m in RE_MD_LINK.find_iter(text) {
+        for bit in mask[m.start()..m.end()].iter_mut() {
+            *bit = true;
+        }
+    }
+
+    mask
 }
 
-fn is_masked(offset: usize, masked_ranges: &[Range<usize>]) -> bool {
-    masked_ranges.binary_search_by(|r| {
-        if offset < r.start {
-            std::cmp::Ordering::Less
-        } else if offset >= r.end {
-            std::cmp::Ordering::Greater
-        } else {
-            std::cmp::Ordering::Equal
-        }
-    }).is_ok()
-}
-
-fn parse_tags(text: &str, masked_ranges: &[Range<usize>]) -> Vec<TagSpan> {
-    let re = Regex::new(r"(?m:^|\s)@([a-zA-Zа-яА-Я0-9_\-]+)").unwrap();
+fn parse_tags(text: &str, mask: &[bool]) -> Vec<TagSpan> {
     let mut tags = Vec::new();
 
-    for cap in re.captures_iter(text) {
+    for cap in RE_TAG.captures_iter(text) {
         let m = cap.get(0).unwrap();
         let leading_len = m.as_str().chars().take_while(|&c| c == ' ' || c == '\n').count();
         let offset = m.start() + leading_len;
 
-        if is_masked(offset, masked_ranges) {
+        if mask[offset] {
             continue;
         }
 
@@ -208,14 +204,13 @@ fn parse_tags(text: &str, masked_ranges: &[Range<usize>]) -> Vec<TagSpan> {
     tags
 }
 
-fn parse_dates(text: &str, masked_ranges: &[Range<usize>], errors: &mut Vec<ParseError>) -> Vec<DateSpan> {
-    let re = Regex::new(r"(?m:^|\s)!(\d{2})\.(\d{2})\.(\d{4})\b").unwrap();
+fn parse_dates(text: &str, mask: &[bool], errors: &mut Vec<ParseError>) -> Vec<DateSpan> {
     let mut dates = Vec::new();
 
-    for cap in re.captures_iter(text) {
+    for cap in RE_DATE.captures_iter(text) {
         let m = cap.get(0).unwrap();
 
-        if is_masked(m.start(), masked_ranges) {
+        if mask[m.start()] {
             continue;
         }
 
@@ -240,7 +235,6 @@ fn parse_dates(text: &str, masked_ranges: &[Range<usize>], errors: &mut Vec<Pars
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
 
     #[test]
     fn test_simple_link() {
@@ -381,10 +375,10 @@ mod tests {
         let cases = vec![
             Case { input: "!01.01.2024", expected_dates: 1, expected_errors: 0 },
             Case { input: "!31.12.1999", expected_dates: 1, expected_errors: 0 },
-            Case { input: "!29.02.2020", expected_dates: 1, expected_errors: 0 }, // leap year
-            Case { input: "!29.02.2021", expected_dates: 0, expected_errors: 1 }, // not leap year
-            Case { input: "!00.01.2024", expected_dates: 0, expected_errors: 1 }, // day 0
-            Case { input: "!01.00.2024", expected_dates: 0, expected_errors: 1 }, // month 0
+            Case { input: "!29.02.2020", expected_dates: 1, expected_errors: 0 },
+            Case { input: "!29.02.2021", expected_dates: 0, expected_errors: 1 },
+            Case { input: "!00.01.2024", expected_dates: 0, expected_errors: 1 },
+            Case { input: "!01.00.2024", expected_dates: 0, expected_errors: 1 },
             Case { input: "text no date", expected_dates: 0, expected_errors: 0 },
             Case { input: "!!01.01.2024", expected_dates: 0, expected_errors: 0 },
         ];
