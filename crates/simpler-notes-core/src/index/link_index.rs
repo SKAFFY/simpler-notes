@@ -12,7 +12,8 @@ pub struct LinkEntry {
 }
 
 pub struct LinkIndex {
-    backward: DashMap<PathBuf, Vec<LinkEntry>>,
+    by_target: DashMap<PathBuf, Vec<LinkEntry>>,
+    by_source: DashMap<PathBuf, Vec<LinkEntry>>,
 }
 
 impl Default for LinkIndex {
@@ -23,49 +24,62 @@ impl Default for LinkIndex {
 
 impl LinkIndex {
     pub fn new() -> Self {
-        LinkIndex { backward: DashMap::new() }
+        LinkIndex {
+            by_target: DashMap::new(),
+            by_source: DashMap::new(),
+        }
     }
 
     pub fn add(&self, _source: PathBuf, entry: LinkEntry) {
-        let target = entry.target.clone();
-        self.backward.entry(target).or_default().push(entry);
+        self.by_target.entry(entry.target.clone()).or_default().push(entry.clone());
+        self.by_source.entry(entry.source.clone()).or_default().push(entry);
     }
 
     pub fn remove_file(&self, path: &Path) {
-        let mut empty_keys = Vec::new();
-        for mut entry in self.backward.iter_mut() {
-            entry.retain(|e| e.source != path);
-            if entry.is_empty() {
-                empty_keys.push(entry.key().clone());
+        if let Some((_, entries)) = self.by_source.remove(path) {
+            for e in &entries {
+                if let Some(mut vec) = self.by_target.get_mut(&e.target) {
+                    vec.retain(|v| v.source != path);
+                    if vec.is_empty() {
+                        drop(vec);
+                        self.by_target.remove(&e.target);
+                    }
+                }
             }
-        }
-        for key in empty_keys {
-            self.backward.remove(&key);
         }
     }
 
     pub fn backlinks(&self, target: &Path) -> Vec<LinkEntry> {
-        self.backward.get(target).map(|e| e.value().clone()).unwrap_or_default()
+        self.by_target.get(target).map(|e| e.value().clone()).unwrap_or_default()
     }
 
     pub fn outgoing(&self, source: &Path) -> Vec<LinkEntry> {
-        let mut result = Vec::new();
-        for entry in self.backward.iter() {
-            for e in entry.value() {
-                if e.source == source {
-                    result.push(e.clone());
+        self.by_source.get(source).map(|e| e.value().clone()).unwrap_or_default()
+    }
+
+    pub fn update_target(&self, old: &Path, new: &Path) {
+        if let Some((_, entries)) = self.by_target.remove(old) {
+            for mut entry in entries {
+                entry.target = new.to_path_buf();
+                self.by_target.entry(new.to_path_buf()).or_default().push(entry.clone());
+                if let Some(mut vec) = self.by_source.get_mut(&entry.source) {
+                    for e in vec.iter_mut() {
+                        if e.target == old {
+                            e.target = new.to_path_buf();
+                        }
+                    }
                 }
             }
         }
-        result
     }
 
     pub fn clear(&self) {
-        self.backward.clear();
+        self.by_target.clear();
+        self.by_source.clear();
     }
 
     pub fn all_targets(&self) -> Vec<PathBuf> {
-        let mut targets: Vec<PathBuf> = self.backward.iter()
+        let mut targets: Vec<PathBuf> = self.by_target.iter()
             .map(|e| e.key().clone())
             .collect();
         targets.sort();
@@ -73,9 +87,12 @@ impl LinkIndex {
         targets
     }
 
-    /// For serialization — iterate all entries
-    pub fn iter(&self) -> dashmap::iter::Iter<'_, PathBuf, Vec<LinkEntry>> {
-        self.backward.iter()
+    pub fn iter(&self) -> Vec<LinkEntry> {
+        let mut result = Vec::new();
+        for e in self.by_source.iter() {
+            result.extend(e.value().iter().cloned());
+        }
+        result
     }
 }
 
@@ -145,6 +162,62 @@ mod tests {
         index.add(PathBuf::from("a.md"), make_entry("a.md", "b.md", "B"));
         index.clear();
         assert!(index.backlinks(&PathBuf::from("b.md")).is_empty());
+    }
+
+    #[test]
+    fn test_update_target() {
+        let index = LinkIndex::new();
+        let old_target = PathBuf::from("old.md");
+        let new_target = PathBuf::from("new.md");
+        index.add(PathBuf::from("a.md"), make_entry("a.md", "old.md", "link"));
+        // backlinks before update
+        assert_eq!(index.backlinks(&old_target).len(), 1);
+        assert!(index.backlinks(&new_target).is_empty());
+        // update
+        index.update_target(&old_target, &new_target);
+        // backlinks after update
+        assert!(index.backlinks(&old_target).is_empty());
+        assert_eq!(index.backlinks(&new_target).len(), 1);
+        assert_eq!(index.backlinks(&new_target)[0].target, new_target);
+    }
+
+    #[test]
+    fn test_outgoing_is_o1() {
+        let index = LinkIndex::new();
+        index.add(PathBuf::from("a.md"), make_entry("a.md", "b.md", "B"));
+        index.add(PathBuf::from("a.md"), make_entry("a.md", "c.md", "C"));
+        let outgoing = index.outgoing(&PathBuf::from("a.md"));
+        assert_eq!(outgoing.len(), 2);
+        assert!(outgoing.iter().any(|e| e.target == PathBuf::from("b.md")));
+        assert!(outgoing.iter().any(|e| e.target == PathBuf::from("c.md")));
+        // file with no outgoing
+        assert!(index.outgoing(&PathBuf::from("orphan.md")).is_empty());
+    }
+
+    #[test]
+    fn test_remove_file_cleans_both_maps() {
+        let index = LinkIndex::new();
+        index.add(PathBuf::from("a.md"), make_entry("a.md", "b.md", "B"));
+        index.add(PathBuf::from("a.md"), make_entry("a.md", "c.md", "C"));
+        index.remove_file(&PathBuf::from("a.md"));
+        assert!(index.outgoing(&PathBuf::from("a.md")).is_empty());
+        assert!(index.backlinks(&PathBuf::from("b.md")).is_empty());
+        assert!(index.backlinks(&PathBuf::from("c.md")).is_empty());
+    }
+
+    #[test]
+    fn test_add_maintains_both_maps() {
+        let index = LinkIndex::new();
+        let entry = make_entry("a.md", "b.md", "B");
+        index.add(PathBuf::from("a.md"), entry);
+        // by_source
+        let outgoing = index.outgoing(&PathBuf::from("a.md"));
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(outgoing[0].target, PathBuf::from("b.md"));
+        // by_target
+        let backlinks = index.backlinks(&PathBuf::from("b.md"));
+        assert_eq!(backlinks.len(), 1);
+        assert_eq!(backlinks[0].source, PathBuf::from("a.md"));
     }
 
     #[test]

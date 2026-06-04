@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDate;
@@ -34,9 +34,11 @@ impl ConcurrentIndex {
             serde_json::to_string_pretty(&dates).map_err(|e| e.to_string())?,
         ).map_err(|e| e.to_string())?;
 
-        let links: Vec<(std::path::PathBuf, Vec<LinkEntry>)> = self.links.iter()
-            .map(|e| (e.key().clone(), e.value().clone()))
-            .collect();
+        let mut links_map: std::collections::BTreeMap<PathBuf, Vec<LinkEntry>> = std::collections::BTreeMap::new();
+        for entry in self.links.iter() {
+            links_map.entry(entry.target.clone()).or_default().push(entry);
+        }
+        let links: Vec<(std::path::PathBuf, Vec<LinkEntry>)> = links_map.into_iter().collect();
         fs::write(
             index_dir.join("links.json"),
             serde_json::to_string_pretty(&links).map_err(|e| e.to_string())?,
