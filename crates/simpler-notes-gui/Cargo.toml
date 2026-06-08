@@ -5,10 +5,12 @@ edition = "2021"
 
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
-gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform", features = ["font-kit", "wayland"] }
+gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform" }
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
 gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
 simpler-notes-core = { path = "../simpler-notes-core" }
+parking_lot = "0.12"
+pathdiff = "0.2"
 walkdir = "2"
 regex = "1"
 urlencoding = "2"
@@ -16,6 +18,7 @@ rfd = "0.15"
 
 [features]
 default = []
-git = ["simpler-notes-core/git"]
-x11 = []
-metal = []
+linux   = ["gpui-platform/font-kit", "gpui-platform/wayland", "gpui-platform/x11"]
+macos   = ["gpui-platform/font-kit"]
+windows = []
+git     = ["simpler-notes-core/git"]

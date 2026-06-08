@@ -1,56 +1,20 @@
 [
   {
+    "source": "test-vault/notes/sub/archive/old.md",
+    "target": "test-vault/notes/note1.md",
+    "label": "note1",
+    "span": {
+      "offset": 33,
+      "length": 9
+    }
+  },
+  {
     "source": "test-vault/notes/negatives/circ-b.md",
     "target": "test-vault/notes/negatives/circ-a.md",
     "label": "circ-a",
     "span": {
       "offset": 79,
       "length": 10
-    }
-  },
-  {
-    "source": "test-vault/notes/negatives/ambiguous-source.md",
-    "target": "test-vault/notes/negatives/a",
-    "label": "a",
-    "span": {
-      "offset": 125,
-      "length": 5
-    }
-  },
-  {
-    "source": "test-vault/notes/multi-links.md",
-    "target": "test-vault/notes/note1.md",
-    "label": "note1",
-    "span": {
-      "offset": 45,
-      "length": 9
-    }
-  },
-  {
-    "source": "test-vault/notes/multi-links.md",
-    "target": "test-vault/notes/sub/subnote.md",
-    "label": "subnote",
-    "span": {
-      "offset": 55,
-      "length": 11
-    }
-  },
-  {
-    "source": "test-vault/notes/multi-links.md",
-    "target": "test-vault/notes/note2.md",
-    "label": "Alias to Note 2",
-    "span": {
-      "offset": 67,
-      "length": 25
-    }
-  },
-  {
-    "source": "test-vault/notes/note1.md",
-    "target": "test-vault/notes/note2.md",
-    "label": "note2",
-    "span": {
-      "offset": 66,
-      "length": 9
     }
   },
   {
@@ -81,11 +45,74 @@
     }
   },
   {
-    "source": "test-vault/notes/sub/archive/old.md",
+    "source": "test-vault/notes/negatives/circ-a.md",
+    "target": "test-vault/notes/negatives/circ-b.md",
+    "label": "circ-b",
+    "span": {
+      "offset": 79,
+      "length": 10
+    }
+  },
+  {
+    "source": "test-vault/notes/note1.md",
+    "target": "test-vault/notes/note2.md",
+    "label": "note2",
+    "span": {
+      "offset": 66,
+      "length": 9
+    }
+  },
+  {
+    "source": "test-vault/notes/negatives/ambiguous-source.md",
+    "target": "test-vault/notes/negatives/a",
+    "label": "a",
+    "span": {
+      "offset": 125,
+      "length": 5
+    }
+  },
+  {
+    "source": "test-vault/notes/sub/subnote.md",
+    "target": "test-vault/notes/note2.md",
+    "label": "note2",
+    "span": {
+      "offset": 32,
+      "length": 9
+    }
+  },
+  {
+    "source": "test-vault/notes/multi-links.md",
     "target": "test-vault/notes/note1.md",
     "label": "note1",
     "span": {
-      "offset": 33,
+      "offset": 45,
+      "length": 9
+    }
+  },
+  {
+    "source": "test-vault/notes/multi-links.md",
+    "target": "test-vault/notes/sub/subnote.md",
+    "label": "subnote",
+    "span": {
+      "offset": 55,
+      "length": 11
+    }
+  },
+  {
+    "source": "test-vault/notes/multi-links.md",
+    "target": "test-vault/notes/note2.md",
+    "label": "Alias to Note 2",
+    "span": {
+      "offset": 67,
+      "length": 25
+    }
+  },
+  {
+    "source": "test-vault/notes/note2.md",
+    "target": "test-vault/notes/note3.md",
+    "label": "note3",
+    "span": {
+      "offset": 49,
       "length": 9
     }
   },
@@ -99,30 +126,12 @@
     }
   },
   {
-    "source": "test-vault/notes/note2.md",
-    "target": "test-vault/notes/note3.md",
-    "label": "note3",
+    "source": "test-vault/notes/test-opt.md",
+    "target": "test-vault/notes/alpha",
+    "label": "alpha",
     "span": {
-      "offset": 49,
+      "offset": 13,
       "length": 9
-    }
-  },
-  {
-    "source": "test-vault/notes/sub/subnote.md",
-    "target": "test-vault/notes/note2.md",
-    "label": "note2",
-    "span": {
-      "offset": 32,
-      "length": 9
-    }
-  },
-  {
-    "source": "test-vault/notes/negatives/circ-a.md",
-    "target": "test-vault/notes/negatives/circ-b.md",
-    "label": "circ-b",
-    "span": {
-      "offset": 79,
-      "length": 10
     }
   }
 ]
