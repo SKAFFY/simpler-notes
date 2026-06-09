@@ -7,6 +7,13 @@ use iced::{Element, Task, Theme};
 
 use simpler_notes_core::vault::{Vault, VaultConfig};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EditorMode {
+    Source,
+    Split,
+    Preview,
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenTab {
     pub path: PathBuf,
@@ -19,6 +26,7 @@ pub enum Message {
     VaultOpened(Result<PathBuf, String>),
     CloseVault,
     ToggleProjectPanel,
+    TogglePreview,
     FileSelected(PathBuf),
     TabSelected(usize),
     TabClosed(usize),
@@ -29,6 +37,7 @@ pub enum Message {
 pub struct App {
     pub vault: Option<Arc<Vault>>,
     pub project_panel_visible: bool,
+    pub editor_mode: EditorMode,
     pub open_tabs: Vec<OpenTab>,
     pub active_tab: Option<usize>,
     pub editors: HashMap<PathBuf, text_editor::Content>,
@@ -40,6 +49,7 @@ impl App {
             Self {
                 vault: None,
                 project_panel_visible: true,
+                editor_mode: EditorMode::Source,
                 open_tabs: Vec::new(),
                 active_tab: None,
                 editors: HashMap::new(),
@@ -61,6 +71,12 @@ impl App {
     pub fn active_editor(&self) -> Option<&text_editor::Content> {
         self.active_tab_path()
             .and_then(|path| self.editors.get(&path))
+    }
+
+    pub fn active_editor_text(&self) -> String {
+        self.active_editor()
+            .map(|e| e.text())
+            .unwrap_or_default()
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -97,6 +113,14 @@ impl App {
             }
             Message::ToggleProjectPanel => {
                 self.project_panel_visible = !self.project_panel_visible;
+                Task::none()
+            }
+            Message::TogglePreview => {
+                self.editor_mode = match self.editor_mode {
+                    EditorMode::Source => EditorMode::Split,
+                    EditorMode::Split => EditorMode::Preview,
+                    EditorMode::Preview => EditorMode::Source,
+                };
                 Task::none()
             }
             Message::FileSelected(path) => {

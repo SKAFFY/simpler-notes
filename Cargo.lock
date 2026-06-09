@@ -3503,6 +3503,7 @@ dependencies = [
  "comrak",
  "iced",
  "parking_lot",
+ "regex",
  "rfd",
  "simpler-notes-core",
  "tokio",
