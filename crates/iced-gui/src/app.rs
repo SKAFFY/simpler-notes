@@ -41,6 +41,7 @@ pub enum Message {
     EditorAction(text_editor::Action),
     SearchQueryChanged(String),
     Search,
+    CloseCurrentTab,
     Save,
 }
 
@@ -224,6 +225,18 @@ impl App {
                 }
                 Task::none()
             }
+            Message::CloseCurrentTab => {
+                if let Some(active) = self.active_tab {
+                    self.editors.remove(&self.open_tabs[active].path);
+                    self.open_tabs.remove(active);
+                    self.active_tab = if self.open_tabs.is_empty() {
+                        None
+                    } else {
+                        Some(active.min(self.open_tabs.len() - 1))
+                    };
+                }
+                Task::none()
+            }
         }
     }
 
@@ -233,6 +246,26 @@ impl App {
 
     pub fn theme(&self) -> Theme {
         Theme::Dark
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        use iced::keyboard;
+        keyboard::listen().filter_map(|event| {
+            match event {
+                keyboard::Event::KeyPressed { key, modifiers, .. } => {
+                    let msg = match key.as_ref() {
+                        keyboard::Key::Character("o") if modifiers.command() => Some(Message::OpenVault),
+                        keyboard::Key::Character("w") if modifiers.command() => Some(Message::CloseCurrentTab),
+                        keyboard::Key::Character("b") if modifiers.command() => Some(Message::ToggleProjectPanel),
+                        keyboard::Key::Character("p") if modifiers.command() => Some(Message::TogglePreview),
+                        keyboard::Key::Character("f") if modifiers.command() => Some(Message::ToggleLowerPanel),
+                        _ => None,
+                    };
+                    msg
+                }
+                _ => None,
+            }
+        })
     }
 }
 

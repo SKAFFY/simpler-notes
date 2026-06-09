@@ -1,28 +1,5 @@
 [
   [
-    "2026-06-25",
-    [
-      {
-        "path": "test-vault/notes/note3.md",
-        "spans": [
-          {
-            "offset": 35,
-            "length": 12
-          }
-        ]
-      },
-      {
-        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
-        "spans": [
-          {
-            "offset": 35,
-            "length": 12
-          }
-        ]
-      }
-    ]
-  ],
-  [
     "2026-07-01",
     [
       {
@@ -89,6 +66,29 @@
         "spans": [
           {
             "offset": 52,
+            "length": 12
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "2026-06-25",
+    [
+      {
+        "path": "test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 35,
+            "length": 12
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 35,
             "length": 12
           }
         ]

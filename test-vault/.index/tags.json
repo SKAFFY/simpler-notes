@@ -1,5 +1,46 @@
 [
   [
+    "tag2",
+    [
+      {
+        "path": "test-vault/notes/note2.md",
+        "spans": [
+          {
+            "offset": 29,
+            "length": 5
+          }
+        ]
+      },
+      {
+        "path": "test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 29,
+            "length": 5
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
+        "spans": [
+          {
+            "offset": 29,
+            "length": 5
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 29,
+            "length": 5
+          }
+        ]
+      }
+    ]
+  ],
+  [
     "mcp-test",
     [
       {
@@ -23,23 +64,23 @@
     ]
   ],
   [
-    "subtag",
+    "links-demo",
     [
       {
-        "path": "test-vault/notes/sub/subnote.md",
+        "path": "test-vault/notes/multi-links.md",
         "spans": [
           {
-            "offset": 12,
-            "length": 7
+            "offset": 19,
+            "length": 11
           }
         ]
       },
       {
-        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/subnote.md",
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
         "spans": [
           {
-            "offset": 12,
-            "length": 7
+            "offset": 19,
+            "length": 11
           }
         ]
       }
@@ -105,20 +146,6 @@
     ]
   ],
   [
-    "perf",
-    [
-      {
-        "path": "test-vault/notes/test-opt.md",
-        "spans": [
-          {
-            "offset": 23,
-            "length": 5
-          }
-        ]
-      }
-    ]
-  ],
-  [
     "archive",
     [
       {
@@ -136,29 +163,6 @@
           {
             "offset": 17,
             "length": 8
-          }
-        ]
-      }
-    ]
-  ],
-  [
-    "important",
-    [
-      {
-        "path": "test-vault/notes/note1.md",
-        "spans": [
-          {
-            "offset": 41,
-            "length": 10
-          }
-        ]
-      },
-      {
-        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
-        "spans": [
-          {
-            "offset": 41,
-            "length": 10
           }
         ]
       }
@@ -188,40 +192,13 @@
     ]
   ],
   [
-    "tag2",
+    "perf",
     [
       {
-        "path": "test-vault/notes/note2.md",
+        "path": "test-vault/notes/test-opt.md",
         "spans": [
           {
-            "offset": 29,
-            "length": 5
-          }
-        ]
-      },
-      {
-        "path": "test-vault/notes/note3.md",
-        "spans": [
-          {
-            "offset": 29,
-            "length": 5
-          }
-        ]
-      },
-      {
-        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
-        "spans": [
-          {
-            "offset": 29,
-            "length": 5
-          }
-        ]
-      },
-      {
-        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
-        "spans": [
-          {
-            "offset": 29,
+            "offset": 23,
             "length": 5
           }
         ]
@@ -229,23 +206,46 @@
     ]
   ],
   [
-    "links-demo",
+    "subtag",
     [
       {
-        "path": "test-vault/notes/multi-links.md",
+        "path": "test-vault/notes/sub/subnote.md",
         "spans": [
           {
-            "offset": 19,
-            "length": 11
+            "offset": 12,
+            "length": 7
           }
         ]
       },
       {
-        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/subnote.md",
         "spans": [
           {
-            "offset": 19,
-            "length": 11
+            "offset": 12,
+            "length": 7
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "important",
+    [
+      {
+        "path": "test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 41,
+            "length": 10
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 41,
+            "length": 10
           }
         ]
       }
