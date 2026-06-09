@@ -1,9 +1,10 @@
 pub mod editor_panel;
+pub mod lower_panel;
 pub mod preview_panel;
 pub mod project_panel;
 
 use iced::widget::{button, column, container, row, space, text};
-use iced::{Center, Element};
+use iced::{Center, Element, Fill, Length};
 
 use crate::app::{App, EditorMode, Message};
 
@@ -41,6 +42,15 @@ pub fn view(app: &App) -> Element<'_, Message> {
             space::horizontal().into()
         };
 
+        let toggle_lower = if app.vault.is_some() {
+            Element::from(
+                button(if app.lower_panel_visible { "Hide" } else { "Search" })
+                    .on_press(Message::ToggleLowerPanel),
+            )
+        } else {
+            space::horizontal().into()
+        };
+
         container(
             row![
                 text("Simpler Notes").size(14),
@@ -48,6 +58,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 open_btn,
                 toggle_panel,
                 toggle_preview,
+                toggle_lower,
             ]
             .padding([4, 8])
             .spacing(8)
@@ -93,5 +104,15 @@ pub fn view(app: &App) -> Element<'_, Message> {
         editor_panel::view(app)
     };
 
-    container(column([title_bar, main_content])).into()
+    let mut children: Vec<Element<'_, Message>> = vec![title_bar, main_content];
+
+    if app.lower_panel_visible && app.vault.is_some() {
+        let lower = container(lower_panel::view(app))
+            .height(Length::FillPortion(3))
+            .width(Fill)
+            .into();
+        children.push(lower);
+    }
+
+    container(column(children)).into()
 }

@@ -14,6 +14,12 @@ pub enum EditorMode {
     Preview,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LowerPanelTab {
+    Search,
+    Diagnostics,
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenTab {
     pub path: PathBuf,
@@ -27,10 +33,14 @@ pub enum Message {
     CloseVault,
     ToggleProjectPanel,
     TogglePreview,
+    ToggleLowerPanel,
+    SelectLowerTab(LowerPanelTab),
     FileSelected(PathBuf),
     TabSelected(usize),
     TabClosed(usize),
     EditorAction(text_editor::Action),
+    SearchQueryChanged(String),
+    Search,
     Save,
 }
 
@@ -41,6 +51,9 @@ pub struct App {
     pub open_tabs: Vec<OpenTab>,
     pub active_tab: Option<usize>,
     pub editors: HashMap<PathBuf, text_editor::Content>,
+    pub search_query: String,
+    pub lower_panel_visible: bool,
+    pub lower_panel_active_tab: LowerPanelTab,
 }
 
 impl App {
@@ -53,6 +66,9 @@ impl App {
                 open_tabs: Vec::new(),
                 active_tab: None,
                 editors: HashMap::new(),
+                search_query: String::new(),
+                lower_panel_visible: false,
+                lower_panel_active_tab: LowerPanelTab::Search,
             },
             Task::none(),
         )
@@ -109,6 +125,8 @@ impl App {
                 self.open_tabs.clear();
                 self.active_tab = None;
                 self.editors.clear();
+                self.search_query.clear();
+                self.lower_panel_visible = false;
                 Task::none()
             }
             Message::ToggleProjectPanel => {
@@ -121,6 +139,15 @@ impl App {
                     EditorMode::Split => EditorMode::Preview,
                     EditorMode::Preview => EditorMode::Source,
                 };
+                Task::none()
+            }
+            Message::ToggleLowerPanel => {
+                self.lower_panel_visible = !self.lower_panel_visible;
+                Task::none()
+            }
+            Message::SelectLowerTab(tab) => {
+                self.lower_panel_active_tab = tab;
+                self.lower_panel_visible = true;
                 Task::none()
             }
             Message::FileSelected(path) => {
@@ -178,6 +205,14 @@ impl App {
                         editor.perform(action);
                     }
                 }
+                Task::none()
+            }
+            Message::SearchQueryChanged(query) => {
+                self.search_query = query;
+                Task::none()
+            }
+            Message::Search => {
+                // Perform search — will use vault.search in a future Task
                 Task::none()
             }
             Message::Save => {
