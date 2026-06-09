@@ -1,12 +1,10 @@
-use iced::widget::{button, center, column, container, row, scrollable, text};
-use iced::{Center, Element, Fill};
+use iced::widget::{button, center, column, container, row, text, text_editor};
+use iced::{keyboard, Center, Element, Fill};
 
 use crate::app::{App, Message};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let content: Element<'_, Message> = if let Some(path) = app.active_tab_path() {
-        let content_str = std::fs::read_to_string(&path).unwrap_or_default();
-
         let tab_bar: Vec<Element<'_, Message>> = app
             .open_tabs
             .iter()
@@ -17,16 +15,32 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .on_press(Message::TabSelected(ix));
                 let close_btn = button(text("✕").size(11))
                     .on_press(Message::TabClosed(ix));
-                let item: Element<'_, Message> = row![tab_btn, close_btn]
-                    .spacing(2)
-                    .into();
-                item
+                row![tab_btn, close_btn].spacing(2).into()
             })
             .collect();
 
+        let editor: Element<'_, Message> = app
+            .editors
+            .get(&path)
+            .map(|content| {
+                text_editor(content)
+                    .height(Fill)
+                    .on_action(Message::EditorAction)
+                    .key_binding(|key_press| {
+                        match key_press.key.as_ref() {
+                            keyboard::Key::Character("s") if key_press.modifiers.command() => {
+                                Some(text_editor::Binding::Custom(Message::Save))
+                            }
+                            _ => text_editor::Binding::from_key_press(key_press),
+                        }
+                    })
+                    .into()
+            })
+            .unwrap_or_else(|| text("Error loading editor").into());
+
         column![
             row(tab_bar).spacing(2).padding([2, 4]),
-            container(scrollable(text(content_str).size(13))).height(Fill),
+            container(editor).height(Fill),
         ]
         .into()
     } else if app.is_vault_open() {

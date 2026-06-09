@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use iced::widget::text_editor;
 use iced::{Element, Task, Theme};
 
 use simpler_notes_core::vault::{Vault, VaultConfig};
@@ -20,6 +22,8 @@ pub enum Message {
     FileSelected(PathBuf),
     TabSelected(usize),
     TabClosed(usize),
+    EditorAction(text_editor::Action),
+    Save,
 }
 
 pub struct App {
@@ -27,6 +31,7 @@ pub struct App {
     pub project_panel_visible: bool,
     pub open_tabs: Vec<OpenTab>,
     pub active_tab: Option<usize>,
+    pub editors: HashMap<PathBuf, text_editor::Content>,
 }
 
 impl App {
@@ -37,6 +42,7 @@ impl App {
                 project_panel_visible: true,
                 open_tabs: Vec::new(),
                 active_tab: None,
+                editors: HashMap::new(),
             },
             Task::none(),
         )
@@ -52,15 +58,9 @@ impl App {
             .map(|t| t.path.clone())
     }
 
-    pub fn _vault_root(&self) -> Option<PathBuf> {
-        self.vault.as_ref().map(|v| v.config.path.clone())
-    }
-
-    pub fn _md_files(&self) -> Vec<PathBuf> {
-        self.vault
-            .as_ref()
-            .map(|v| v.list_md_files())
-            .unwrap_or_default()
+    pub fn active_editor(&self) -> Option<&text_editor::Content> {
+        self.active_tab_path()
+            .and_then(|path| self.editors.get(&path))
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -92,6 +92,7 @@ impl App {
                 self.vault = None;
                 self.open_tabs.clear();
                 self.active_tab = None;
+                self.editors.clear();
                 Task::none()
             }
             Message::ToggleProjectPanel => {
@@ -105,6 +106,11 @@ impl App {
                         self.active_tab = Some(idx);
                     }
                     None => {
+                        if !self.editors.contains_key(&path) {
+                            let content = std::fs::read_to_string(&path).unwrap_or_default();
+                            self.editors
+                                .insert(path.clone(), text_editor::Content::with_text(&content));
+                        }
                         let title = path
                             .file_stem()
                             .map(|s| s.to_string_lossy().to_string())
@@ -123,6 +129,8 @@ impl App {
             }
             Message::TabClosed(idx) => {
                 if idx < self.open_tabs.len() {
+                    let tab = &self.open_tabs[idx];
+                    self.editors.remove(&tab.path);
                     self.open_tabs.remove(idx);
                     match self.active_tab {
                         Some(active) if active == idx => {
@@ -136,6 +144,23 @@ impl App {
                             self.active_tab = Some(active - 1);
                         }
                         _ => {}
+                    }
+                }
+                Task::none()
+            }
+            Message::EditorAction(action) => {
+                if let Some(path) = self.active_tab_path() {
+                    if let Some(editor) = self.editors.get_mut(&path) {
+                        editor.perform(action);
+                    }
+                }
+                Task::none()
+            }
+            Message::Save => {
+                if let (Some(path), Some(editor)) = (self.active_tab_path(), self.active_editor()) {
+                    let text = editor.text();
+                    if let Some(ref vault) = self.vault {
+                        let _ = vault.write_note(&path, &text);
                     }
                 }
                 Task::none()
