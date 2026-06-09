@@ -2,6 +2,6 @@
 resolver = "2"
 members = [
     "crates/simpler-notes-core",
-    "crates/simpler-notes-gui",
     "crates/simpler-notes-mcp",
+    "crates/iced-gui",
 ]
