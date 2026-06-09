@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use iced::widget::{button, center, column, row, space, text};
-use iced::{Center, Element, Task, Theme};
+use iced::{Element, Task, Theme};
 
 use simpler_notes_core::vault::{Vault, VaultConfig};
 
@@ -11,15 +10,27 @@ pub enum Message {
     OpenVault,
     VaultOpened(Result<PathBuf, String>),
     CloseVault,
+    ToggleProjectPanel,
 }
 
 pub struct App {
-    vault: Option<Arc<Vault>>,
+    pub vault: Option<Arc<Vault>>,
+    pub project_panel_visible: bool,
 }
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        (Self { vault: None }, Task::none())
+        (
+            Self {
+                vault: None,
+                project_panel_visible: true,
+            },
+            Task::none(),
+        )
+    }
+
+    pub fn is_vault_open(&self) -> bool {
+        self.vault.is_some()
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -51,48 +62,15 @@ impl App {
                 self.vault = None;
                 Task::none()
             }
+            Message::ToggleProjectPanel => {
+                self.project_panel_visible = !self.project_panel_visible;
+                Task::none()
+            }
         }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let header: Element<'_, Message> = row![
-            text("Simpler Notes").size(20),
-            space::horizontal(),
-            button("Open Vault").on_press(Message::OpenVault),
-        ]
-        .padding(10)
-        .spacing(10)
-        .align_y(Center)
-        .into();
-
-        let body: Element<'_, Message> = if self.vault.is_some() {
-            center(
-                column![
-                    text("Vault is open").size(16),
-                    text("Select a file from the project panel to start editing.")
-                        .size(14),
-                ]
-                .spacing(10)
-                .align_x(Center),
-            )
-            .into()
-        } else {
-            center(
-                column![
-                    text("Welcome to Simpler Notes!").size(24),
-                    text("Open a folder with markdown notes to get started.")
-                        .size(14),
-                    button("Open Vault")
-                        .on_press(Message::OpenVault)
-                        .padding(10),
-                ]
-                .spacing(20)
-                .align_x(Center),
-            )
-            .into()
-        };
-
-        column![header, body].into()
+        crate::workspace::view(self)
     }
 
     pub fn theme(&self) -> Theme {

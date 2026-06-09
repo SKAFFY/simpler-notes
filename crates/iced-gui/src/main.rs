@@ -1,4 +1,5 @@
 mod app;
+mod workspace;
 
 use app::App;
 
