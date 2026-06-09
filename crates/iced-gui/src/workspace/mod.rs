@@ -4,9 +4,31 @@ pub mod preview_panel;
 pub mod project_panel;
 
 use iced::widget::{button, column, container, row, space, text};
-use iced::{Center, Element, Fill, Length};
+use iced::{Center, Color, Element, Fill, Length};
 
 use crate::app::{App, EditorMode, Message};
+
+fn vsplit<'a>() -> Element<'a, crate::app::Message> {
+    container(space::vertical())
+        .width(1)
+        .height(Fill)
+        .style(|_: &iced::Theme| {
+            container::Style::default()
+                .background(Color::from_rgb(0.3, 0.3, 0.3))
+        })
+        .into()
+}
+
+fn hsplit<'a>() -> Element<'a, crate::app::Message> {
+    container(space::horizontal())
+        .height(1)
+        .width(Fill)
+        .style(|_: &iced::Theme| {
+            container::Style::default()
+                .background(Color::from_rgb(0.3, 0.3, 0.3))
+        })
+        .into()
+}
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let title_bar: Element<'_, Message> = {
@@ -64,42 +86,62 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .spacing(8)
             .align_y(Center),
         )
+        .width(Fill)
         .into()
     };
 
+    let editor_width = if app.project_panel_visible {
+        Length::FillPortion(4)
+    } else {
+        Fill
+    };
+    let project_width = Length::FillPortion(2);
+
     let main_content: Element<'_, Message> = if app.is_vault_open() && app.project_panel_visible {
-        match app.editor_mode {
+        let panels: Element<'_, Message> = match app.editor_mode {
             EditorMode::Source => {
                 row![
-                    project_panel::view(app),
-                    editor_panel::view(app),
+                    container(project_panel::view(app)).width(project_width),
+                    vsplit(),
+                    container(editor_panel::view(app)).width(editor_width),
                 ]
                 .into()
             }
             EditorMode::Split => {
+                let preview_width = Length::FillPortion(3);
                 row![
-                    project_panel::view(app),
-                    editor_panel::view(app),
-                    preview_panel::view(app),
+                    container(project_panel::view(app)).width(project_width),
+                    vsplit(),
+                    container(editor_panel::view(app)).width(editor_width),
+                    vsplit(),
+                    container(preview_panel::view(app)).width(preview_width),
                 ]
                 .into()
             }
             EditorMode::Preview => {
                 row![
-                    project_panel::view(app),
-                    preview_panel::view(app),
+                    container(project_panel::view(app)).width(project_width),
+                    vsplit(),
+                    container(preview_panel::view(app)).width(editor_width),
                 ]
                 .into()
             }
-        }
+        };
+        container(panels).height(Fill).into()
     } else if app.is_vault_open() {
-        match app.editor_mode {
+        let panels = match app.editor_mode {
             EditorMode::Source => editor_panel::view(app),
             EditorMode::Split => {
-                row![editor_panel::view(app), preview_panel::view(app)].into()
+                row![
+                    container(editor_panel::view(app)).width(Length::FillPortion(4)),
+                    vsplit(),
+                    container(preview_panel::view(app)).width(Length::FillPortion(3)),
+                ]
+                .into()
             }
             EditorMode::Preview => preview_panel::view(app),
-        }
+        };
+        container(panels).height(Fill).into()
     } else {
         editor_panel::view(app)
     };
@@ -107,12 +149,17 @@ pub fn view(app: &App) -> Element<'_, Message> {
     let mut children: Vec<Element<'_, Message>> = vec![title_bar, main_content];
 
     if app.lower_panel_visible && app.vault.is_some() {
-        let lower = container(lower_panel::view(app))
-            .height(Length::FillPortion(3))
-            .width(Fill)
-            .into();
+        let lower = container(
+            column![
+                hsplit(),
+                lower_panel::view(app),
+            ]
+        )
+        .height(Length::FillPortion(3))
+        .width(Fill)
+        .into();
         children.push(lower);
     }
 
-    container(column(children)).into()
+    container(column(children)).height(Fill).into()
 }

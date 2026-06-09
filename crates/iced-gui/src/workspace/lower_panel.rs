@@ -39,38 +39,31 @@ fn search_panel(app: &App) -> Element<'_, Message> {
 
     let results: Element<'_, Message> = if app.search_query.is_empty() || app.vault.is_none() {
         text("Enter a query to search").size(13).into()
-    } else if let Some(ref vault) = app.vault {
-        let search_results = vault.search(&app.search_query);
-        match search_results {
-            Ok(results_list) => {
-                if results_list.is_empty() {
-                    text("No results found").size(13).into()
-                } else {
-                    let items: Vec<Element<'_, Message>> = results_list
-                        .into_iter()
-                        .map(|r| {
-                            let path = r.path.clone();
-                            button(
-                                container(
-                                    column![
-                                        text(r.title).size(13).color(Color::from_rgb(0.4, 0.6, 1.0)),
-                                        text(r.path.display().to_string()).size(11),
-                                    ]
-                                    .spacing(2),
-                                )
-                                .padding([2, 4]),
-                            )
-                            .on_press(Message::SearchResultClicked(path))
-                            .into()
-                        })
-                        .collect();
-                    scrollable(iced::widget::Column::with_children(items).spacing(2)).into()
-                }
-            }
-            Err(e) => text(format!("Search error: {}", e)).size(13).into(),
-        }
+    } else if let Some(ref error) = app.search_error {
+        text(format!("Search error: {}", error)).size(13).into()
+    } else if app.search_results.is_empty() {
+        text("No results found").size(13).into()
     } else {
-        text("No vault open").size(13).into()
+        let items: Vec<Element<'_, Message>> = app
+            .search_results
+            .iter()
+            .map(|r| {
+                let path = r.path.clone();
+                button(
+                    container(
+                        column![
+                            text(&r.title).size(13).color(Color::from_rgb(0.4, 0.6, 1.0)),
+                            text(r.path.display().to_string()).size(11),
+                        ]
+                        .spacing(2),
+                    )
+                    .padding([2, 4]),
+                )
+                .on_press(Message::SearchResultClicked(path))
+                .into()
+            })
+            .collect();
+        scrollable(iced::widget::Column::with_children(items).spacing(2)).into()
     };
 
     column![input, container(results).height(Fill).width(Fill)].spacing(4).padding(4).into()

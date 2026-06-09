@@ -303,10 +303,11 @@ pub fn view(app: &App) -> Element<'_, Message> {
 }
 
 fn preprocess_wikilinks(input: &str) -> String {
-    let re = regex::Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
+    let re = regex::Regex::new(r"\[\[([^\]]+?)(?:\|([^\]]+?))?\]\]").unwrap();
     re.replace_all(input, |caps: &regex::Captures| {
         let target = &caps[1];
-        format!("[{}]({}.md)", target, target)
+        let label = caps.get(2).map(|m| m.as_str()).unwrap_or(target);
+        format!("[{}]({}.md)", label, target)
     })
     .to_string()
 }

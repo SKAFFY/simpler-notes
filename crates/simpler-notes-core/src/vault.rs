@@ -40,7 +40,7 @@ pub struct IndexReport {
 }
 
 /// A search result with relative path and title.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VaultSearchResult {
     pub path: PathBuf,
     pub title: String,

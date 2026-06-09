@@ -5,7 +5,7 @@ use std::sync::Arc;
 use iced::widget::text_editor;
 use iced::{Element, Task, Theme};
 
-use simpler_notes_core::vault::{Vault, VaultConfig};
+use simpler_notes_core::vault::{Vault, VaultConfig, VaultSearchResult};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EditorMode {
@@ -41,6 +41,7 @@ pub enum Message {
     EditorAction(text_editor::Action),
     SearchQueryChanged(String),
     Search,
+    SearchResultsUpdated(Result<Vec<VaultSearchResult>, String>),
     CloseCurrentTab,
     Save,
     ToggleDir(PathBuf),
@@ -56,6 +57,8 @@ pub struct App {
     pub active_tab: Option<usize>,
     pub editors: HashMap<PathBuf, text_editor::Content>,
     pub search_query: String,
+    pub search_results: Vec<VaultSearchResult>,
+    pub search_error: Option<String>,
     pub lower_panel_visible: bool,
     pub lower_panel_active_tab: LowerPanelTab,
     pub expanded_dirs: HashSet<PathBuf>,
@@ -72,6 +75,8 @@ impl App {
                 active_tab: None,
                 editors: HashMap::new(),
                 search_query: String::new(),
+                search_results: Vec::new(),
+                search_error: None,
                 lower_panel_visible: false,
                 lower_panel_active_tab: LowerPanelTab::Search,
                 expanded_dirs: HashSet::new(),
@@ -218,7 +223,27 @@ impl App {
                 Task::none()
             }
             Message::Search => {
-                // Perform search — will use vault.search in a future Task
+                if let Some(ref vault) = self.vault {
+                    let query = self.search_query.clone();
+                    let v = vault.clone();
+                    Task::perform(
+                        async move { v.search(&query) },
+                        Message::SearchResultsUpdated,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SearchResultsUpdated(result) => {
+                match result {
+                    Ok(results) => {
+                        self.search_results = results;
+                        self.search_error = None;
+                    }
+                    Err(e) => {
+                        self.search_error = Some(e);
+                    }
+                }
                 Task::none()
             }
             Message::Save => {
@@ -260,7 +285,16 @@ impl App {
                 Task::none()
             }
             Message::SearchResultClicked(path) => {
-                self.update(Message::FileSelected(path))
+                if let Some(ref vault) = self.vault {
+                    let abs_path = if path.is_absolute() {
+                        path
+                    } else {
+                        vault.config.path.join(&path)
+                    };
+                    self.update(Message::FileSelected(abs_path))
+                } else {
+                    Task::none()
+                }
             }
         }
     }
