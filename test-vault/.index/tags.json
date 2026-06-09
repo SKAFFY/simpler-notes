@@ -1,9 +1,37 @@
 [
   [
-    "project",
+    "mcp-test",
     [
       {
-        "path": "test-vault/notes/project.md",
+        "path": "test-vault/notes/mcp-test.md",
+        "spans": [
+          {
+            "offset": 11,
+            "length": 9
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "perf",
+    [
+      {
+        "path": "test-vault/notes/test-opt.md",
+        "spans": [
+          {
+            "offset": 23,
+            "length": 5
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "archive",
+    [
+      {
+        "path": "test-vault/notes/sub/archive/old.md",
         "spans": [
           {
             "offset": 17,
@@ -60,14 +88,28 @@
     ]
   ],
   [
-    "archive",
+    "project",
     [
       {
-        "path": "test-vault/notes/sub/archive/old.md",
+        "path": "test-vault/notes/project.md",
         "spans": [
           {
             "offset": 17,
             "length": 8
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "important",
+    [
+      {
+        "path": "test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 41,
+            "length": 10
           }
         ]
       }
@@ -91,34 +133,6 @@
           {
             "offset": 29,
             "length": 5
-          }
-        ]
-      }
-    ]
-  ],
-  [
-    "mcp-test",
-    [
-      {
-        "path": "test-vault/notes/mcp-test.md",
-        "spans": [
-          {
-            "offset": 11,
-            "length": 9
-          }
-        ]
-      }
-    ]
-  ],
-  [
-    "important",
-    [
-      {
-        "path": "test-vault/notes/note1.md",
-        "spans": [
-          {
-            "offset": 41,
-            "length": 10
           }
         ]
       }

@@ -1,33 +1,5 @@
 [
   [
-    "2026-06-25",
-    [
-      {
-        "path": "test-vault/notes/note3.md",
-        "spans": [
-          {
-            "offset": 35,
-            "length": 12
-          }
-        ]
-      }
-    ]
-  ],
-  [
-    "2026-06-15",
-    [
-      {
-        "path": "test-vault/notes/note1.md",
-        "spans": [
-          {
-            "offset": 52,
-            "length": 12
-          }
-        ]
-      }
-    ]
-  ],
-  [
     "2026-07-01",
     [
       {
@@ -58,6 +30,43 @@
         "spans": [
           {
             "offset": 35,
+            "length": 12
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "2026-06-25",
+    [
+      {
+        "path": "test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 35,
+            "length": 12
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "2026-06-15",
+    [
+      {
+        "path": "test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 52,
+            "length": 12
+          }
+        ]
+      },
+      {
+        "path": "test-vault/notes/test-opt.md",
+        "spans": [
+          {
+            "offset": 28,
             "length": 12
           }
         ]
