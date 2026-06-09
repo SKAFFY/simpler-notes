@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, scrollable, text};
-use iced::Element;
+use iced::widget::{button, column, container, row, scrollable, space, text};
+use iced::{Element, Length};
 
 use crate::app::{App, Message};
 
@@ -9,9 +9,10 @@ pub struct FileEntry {
     label: String,
     path: PathBuf,
     depth: usize,
+    is_dir: bool,
 }
 
-fn collect_files(dir: PathBuf, vault_root: PathBuf, depth: usize, app: &App) -> Vec<FileEntry> {
+fn collect_files(dir: PathBuf, vault_root: PathBuf, depth: usize, expanded: &std::collections::HashSet<PathBuf>, app: &App) -> Vec<FileEntry> {
     let mut entries = Vec::new();
     let Ok(read_dir) = std::fs::read_dir(&dir) else {
         return entries;
@@ -45,13 +46,18 @@ fn collect_files(dir: PathBuf, vault_root: PathBuf, depth: usize, app: &App) -> 
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
+        let is_expanded = expanded.contains(&dir_path);
+        let icon = if is_expanded { "📂" } else { "📁" };
         entries.push(FileEntry {
-            label: format!("📁 {}", name),
+            label: format!("{} {}", icon, name),
             path: dir_path.clone(),
             depth,
+            is_dir: true,
         });
-        let children = collect_files(dir_path, vault_root.clone(), depth + 1, app);
-        entries.extend(children);
+        if is_expanded {
+            let children = collect_files(dir_path, vault_root.clone(), depth + 1, expanded, app);
+            entries.extend(children);
+        }
     }
 
     for file_path in files {
@@ -74,6 +80,7 @@ fn collect_files(dir: PathBuf, vault_root: PathBuf, depth: usize, app: &App) -> 
             label: format!("{}{}", prefix, name),
             path: file_path,
             depth,
+            is_dir: false,
         });
     }
 
@@ -83,14 +90,24 @@ fn collect_files(dir: PathBuf, vault_root: PathBuf, depth: usize, app: &App) -> 
 pub fn view(app: &App) -> Element<'_, Message> {
     let content: Element<'_, Message> = if let Some(ref vault) = app.vault {
         let root = vault.config.path.clone();
-        let entries = collect_files(root.clone(), root, 0, app);
+        let entries = collect_files(root.clone(), root, 0, &app.expanded_dirs, app);
         let children: Vec<Element<'_, Message>> = entries
             .into_iter()
             .map(|entry| {
-                let _indent = entry.depth * 16;
-                let fp = entry.path;
-                button(text(entry.label).size(13))
-                    .on_press(Message::FileSelected(fp))
+                    let indent = entry.depth * 20;
+                    let fp = entry.path;
+                    let btn = if entry.is_dir {
+                        button(text(entry.label).size(13)).on_press(Message::ToggleDir(fp))
+                    } else {
+                        button(text(entry.label).size(13)).on_press(Message::FileSelected(fp))
+                    };
+                    container(
+                        row![
+                            space::horizontal().width(Length::Fixed(indent as f32)),
+                            btn,
+                        ]
+                    )
+                    .padding([0, 4])
                     .into()
             })
             .collect();

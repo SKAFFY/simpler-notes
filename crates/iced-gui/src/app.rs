@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -43,6 +43,9 @@ pub enum Message {
     Search,
     CloseCurrentTab,
     Save,
+    ToggleDir(PathBuf),
+    LinkClicked(String),
+    SearchResultClicked(PathBuf),
 }
 
 pub struct App {
@@ -55,6 +58,7 @@ pub struct App {
     pub search_query: String,
     pub lower_panel_visible: bool,
     pub lower_panel_active_tab: LowerPanelTab,
+    pub expanded_dirs: HashSet<PathBuf>,
 }
 
 impl App {
@@ -70,6 +74,7 @@ impl App {
                 search_query: String::new(),
                 lower_panel_visible: false,
                 lower_panel_active_tab: LowerPanelTab::Search,
+                expanded_dirs: HashSet::new(),
             },
             Task::none(),
         )
@@ -236,6 +241,26 @@ impl App {
                     };
                 }
                 Task::none()
+            }
+            Message::ToggleDir(path) => {
+                if self.expanded_dirs.contains(&path) {
+                    self.expanded_dirs.remove(&path);
+                } else {
+                    self.expanded_dirs.insert(path);
+                }
+                Task::none()
+            }
+            Message::LinkClicked(target) => {
+                if let Some(ref vault) = self.vault {
+                    let target_path = vault.config.path.join(&target);
+                    if target_path.exists() {
+                        return self.update(Message::FileSelected(target_path));
+                    }
+                }
+                Task::none()
+            }
+            Message::SearchResultClicked(path) => {
+                self.update(Message::FileSelected(path))
             }
         }
     }

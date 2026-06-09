@@ -49,14 +49,18 @@ fn search_panel(app: &App) -> Element<'_, Message> {
                     let items: Vec<Element<'_, Message>> = results_list
                         .into_iter()
                         .map(|r| {
-                            container(
-                                column![
-                                    text(r.title).size(13).color(Color::from_rgb(0.4, 0.6, 1.0)),
-                                    text(r.path.display().to_string()).size(11),
-                                ]
-                                .spacing(2),
+                            let path = r.path.clone();
+                            button(
+                                container(
+                                    column![
+                                        text(r.title).size(13).color(Color::from_rgb(0.4, 0.6, 1.0)),
+                                        text(r.path.display().to_string()).size(11),
+                                    ]
+                                    .spacing(2),
+                                )
+                                .padding([2, 4]),
                             )
-                            .padding([2, 4])
+                            .on_press(Message::SearchResultClicked(path))
                             .into()
                         })
                         .collect();

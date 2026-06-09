@@ -1,6 +1,6 @@
 use comrak::nodes::{ListType, NodeValue};
 use comrak::{parse_document, Arena, Options};
-use iced::widget::{scrollable, Column};
+use iced::widget::{button, scrollable, Column};
 use iced::{Color, Element, Fill, Font};
 
 use crate::app::{App, Message};
@@ -9,9 +9,11 @@ use crate::app::{App, Message};
 enum MdNode {
     Heading { level: u8, children: Vec<MdNode> },
     Paragraph(Vec<MdNode>),
-    Text(String),
+    RawText(String),
     Code(String),
     CodeBlock(String),
+    Tag(String),
+    Date(String),
     List(bool, Vec<Vec<MdNode>>),
     BlockQuote(Vec<MdNode>),
     ThematicBreak,
@@ -40,7 +42,10 @@ fn convert_ast<'a>(node: &'a comrak::nodes::AstNode<'a>) -> Vec<MdNode> {
                 result.push(MdNode::Paragraph(children));
             }
             NodeValue::Text(ref t) => {
-                result.push(MdNode::Text(t.to_string()));
+                let s = t.as_str();
+                // Split into tags, dates, and plain text
+                let parts = split_special_tokens(s);
+                result.extend(parts);
             }
             NodeValue::CodeBlock(ref cb) => {
                 result.push(MdNode::CodeBlock(cb.literal.to_string()));
@@ -77,6 +82,7 @@ fn convert_ast<'a>(node: &'a comrak::nodes::AstNode<'a>) -> Vec<MdNode> {
                 result.push(MdNode::Emph(children));
             }
             NodeValue::Link(link) => {
+                // After wikilink preprocessing, links are [label](target.md)
                 let mut link_text = String::new();
                 for inner in child.children() {
                     let inner_data = inner.data.borrow();
@@ -84,9 +90,10 @@ fn convert_ast<'a>(node: &'a comrak::nodes::AstNode<'a>) -> Vec<MdNode> {
                         link_text.push_str(t.as_str());
                     }
                 }
+                let target = link.url.trim_end_matches(".md").to_string();
                 result.push(MdNode::Link {
                     text: link_text,
-                    url: link.url.to_string(),
+                    url: target,
                 });
             }
             _ => {
@@ -97,6 +104,51 @@ fn convert_ast<'a>(node: &'a comrak::nodes::AstNode<'a>) -> Vec<MdNode> {
     }
 
     result
+}
+
+/// Split raw text into tags (#tag), dates (2024-01-01), and plain segments
+fn split_special_tokens(s: &str) -> Vec<MdNode> {
+    use regex::Regex;
+
+    let tag_re = Regex::new(r"(#([\w-]+))").unwrap();
+    let date_re = Regex::new(r"(\d{4}-\d{2}-\d{2})").unwrap();
+
+    // First split by tags, then by dates
+    let mut parts = Vec::new();
+
+    // Simple approach: tokenize
+    let mut last_end = 0;
+    let mut tokens: Vec<(usize, usize, &str, &str)> = Vec::new(); // (start, end, type, value)
+
+    for cap in tag_re.find_iter(s) {
+        tokens.push((cap.start(), cap.end(), "tag", cap.as_str()));
+    }
+    for cap in date_re.find_iter(s) {
+        tokens.push((cap.start(), cap.end(), "date", cap.as_str()));
+    }
+    tokens.sort_by_key(|t| t.0);
+
+    for (start, end, kind, value) in tokens {
+        if start > last_end {
+            parts.push(MdNode::RawText(s[last_end..start].to_string()));
+        }
+        match kind {
+            "tag" => parts.push(MdNode::Tag(value.to_string())),
+            "date" => parts.push(MdNode::Date(value.to_string())),
+            _ => {}
+        }
+        last_end = end;
+    }
+
+    if last_end < s.len() {
+        parts.push(MdNode::RawText(s[last_end..].to_string()));
+    }
+
+    if parts.is_empty() {
+        parts.push(MdNode::RawText(s.to_string()));
+    }
+
+    parts
 }
 
 fn build_widgets(nodes: Vec<MdNode>) -> Vec<Element<'static, Message>> {
@@ -118,8 +170,36 @@ fn build_widgets(nodes: Vec<MdNode>) -> Vec<Element<'static, Message>> {
                     elements.push(iced::widget::container(iced::widget::row(inner)).padding([0, 4]).into());
                 }
             }
-            MdNode::Text(t) => {
-                elements.push(iced::widget::text(t).size(14).into());
+            MdNode::RawText(t) => {
+                if !t.trim().is_empty() {
+                    elements.push(iced::widget::text(t).size(14).into());
+                }
+            }
+            MdNode::Tag(tag) => {
+                elements.push(
+                    iced::widget::container(
+                        iced::widget::text(tag).size(14).color(Color::from_rgb(0.3, 0.8, 0.6))
+                    )
+                    .style(|_: &iced::Theme| {
+                        iced::widget::container::Style::default()
+                            .background(Color::from_rgba(0.3, 0.8, 0.6, 0.15))
+                    })
+                    .padding([1, 4])
+                    .into(),
+                );
+            }
+            MdNode::Date(date) => {
+                elements.push(
+                    iced::widget::container(
+                        iced::widget::text(date).size(14).color(Color::from_rgb(0.6, 0.6, 1.0))
+                    )
+                    .style(|_: &iced::Theme| {
+                        iced::widget::container::Style::default()
+                            .background(Color::from_rgba(0.6, 0.6, 1.0, 0.15))
+                    })
+                    .padding([1, 4])
+                    .into(),
+                );
             }
             MdNode::Code(code) => {
                 elements.push(
@@ -193,9 +273,8 @@ fn build_widgets(nodes: Vec<MdNode>) -> Vec<Element<'static, Message>> {
             }
             MdNode::Link { text: link_text, url } => {
                 elements.push(
-                    iced::widget::text(format!("{} ({})", link_text, url))
-                        .size(14)
-                        .color(Color::from_rgb(0.4, 0.6, 1.0))
+                    button(iced::widget::text(link_text).size(14).color(Color::from_rgb(0.4, 0.6, 1.0)))
+                        .on_press(Message::LinkClicked(url))
                         .into(),
                 );
             }
