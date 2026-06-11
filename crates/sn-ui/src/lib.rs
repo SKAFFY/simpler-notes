@@ -2,6 +2,7 @@ pub mod app;
 pub mod workspace;
 pub mod panel;
 pub mod dock;
+pub mod layout_state;
 
 pub use app::SnApp;
 pub use workspace::Workspace;
