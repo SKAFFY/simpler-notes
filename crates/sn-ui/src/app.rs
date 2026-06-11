@@ -5,6 +5,12 @@ pub struct SnApp {
     title: Option<SharedString>,
 }
 
+impl Default for SnApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SnApp {
     pub fn new() -> Self {
         Self {
