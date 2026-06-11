@@ -9,6 +9,14 @@ impl TabPanel {
     pub fn new(_cx: &mut App) -> Self {
         Self { active_ix: 0 }
     }
+
+    pub fn active_index(&self) -> usize {
+        self.active_ix
+    }
+
+    pub fn set_active_index(&mut self, index: usize) {
+        self.active_ix = index;
+    }
 }
 
 impl Render for TabPanel {
