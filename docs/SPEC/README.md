@@ -41,3 +41,4 @@ docs/SPEC/
 - `DESIGN-DOCUMENT.md` — концепт и хотелки
 - `docs/architecture-review.md` — архитектурные решения
 - `docs/superpowers/plans/` — планы реализации
+- `docs/superpowers/specs/2026-06-12-sn-ui-architecture-design.md` — Spec UI-фреймворка sn-ui (Layer 1-10: App, Workspace, Panel, Dock, Command, Testing)
