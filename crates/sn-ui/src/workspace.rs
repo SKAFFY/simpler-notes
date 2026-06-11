@@ -13,6 +13,12 @@ pub struct WorkspaceState {
     initialized: AtomicBool,
 }
 
+impl Default for WorkspaceState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkspaceState {
     pub fn new() -> Self {
         Self {
