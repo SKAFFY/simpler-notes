@@ -1,4 +1,5 @@
 pub mod area;
+pub mod stack;
 pub mod tab;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
