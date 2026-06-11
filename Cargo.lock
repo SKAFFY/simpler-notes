@@ -6119,6 +6119,7 @@ dependencies = [
  "regex",
  "rfd",
  "simpler-notes-core",
+ "sn-ui",
  "urlencoding",
  "walkdir",
 ]
