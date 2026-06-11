@@ -1,4 +1,5 @@
 pub mod area;
+pub mod drag;
 pub mod stack;
 pub mod tab;
 
