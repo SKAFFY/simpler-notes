@@ -1,6 +1,7 @@
 use gpui::*;
 
 pub struct TabPanel {
+    #[allow(dead_code)]
     active_ix: usize,
 }
 
