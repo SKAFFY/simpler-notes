@@ -25,3 +25,4 @@ deploy.sh
 
 # Test vault artifacts
 test-vault/.index/
+.DS_Store

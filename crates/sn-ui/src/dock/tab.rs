@@ -1,0 +1,26 @@
+use gpui::*;
+
+pub struct TabPanel {
+    #[allow(dead_code)]
+    active_ix: usize,
+}
+
+impl TabPanel {
+    pub fn new(_cx: &mut App) -> Self {
+        Self { active_ix: 0 }
+    }
+
+    pub fn active_index(&self) -> usize {
+        self.active_ix
+    }
+
+    pub fn set_active_index(&mut self, index: usize) {
+        self.active_ix = index;
+    }
+}
+
+impl Render for TabPanel {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().child("TabPanel")
+    }
+}

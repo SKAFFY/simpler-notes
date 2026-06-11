@@ -1,21 +1,30 @@
 [
   [
-    "2026-07-01",
+    "2026-06-15",
     [
       {
-        "path": "test-vault/notes/project.md",
+        "path": "test-vault/notes/note1.md",
         "spans": [
           {
-            "offset": 26,
+            "offset": 52,
             "length": 12
           }
         ]
       },
       {
-        "path": "test-vault/notes/multi-links.md",
+        "path": "test-vault/notes/test-opt.md",
         "spans": [
           {
-            "offset": 31,
+            "offset": 28,
+            "length": 12
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+        "spans": [
+          {
+            "offset": 52,
             "length": 12
           }
         ]
@@ -27,6 +36,15 @@
     [
       {
         "path": "test-vault/notes/note2.md",
+        "spans": [
+          {
+            "offset": 35,
+            "length": 12
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
         "spans": [
           {
             "offset": 35,
@@ -47,26 +65,53 @@
             "length": 12
           }
         ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
+        "spans": [
+          {
+            "offset": 35,
+            "length": 12
+          }
+        ]
       }
     ]
   ],
   [
-    "2026-06-15",
+    "2026-07-01",
     [
       {
-        "path": "test-vault/notes/note1.md",
+        "path": "test-vault/notes/project.md",
         "spans": [
           {
-            "offset": 52,
+            "offset": 26,
             "length": 12
           }
         ]
       },
       {
-        "path": "test-vault/notes/test-opt.md",
+        "path": "test-vault/notes/multi-links.md",
         "spans": [
           {
-            "offset": 28,
+            "offset": 31,
+            "length": 12
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/project.md",
+        "spans": [
+          {
+            "offset": 26,
+            "length": 12
+          }
+        ]
+      },
+      {
+        "path": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
+        "spans": [
+          {
+            "offset": 31,
             "length": 12
           }
         ]

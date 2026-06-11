@@ -1,10 +1,37 @@
 [
   {
-    "source": "test-vault/notes/sub/archive/old.md",
-    "target": "test-vault/notes/note1.md",
-    "label": "note1",
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
+    "label": "note2",
     "span": {
-      "offset": 33,
+      "offset": 66,
+      "length": 9
+    }
+  },
+  {
+    "source": "test-vault/notes/note1.md",
+    "target": "test-vault/notes/note2.md",
+    "label": "note2",
+    "span": {
+      "offset": 66,
+      "length": 9
+    }
+  },
+  {
+    "source": "test-vault/notes/negatives/circ-a.md",
+    "target": "test-vault/notes/negatives/circ-b.md",
+    "label": "circ-b",
+    "span": {
+      "offset": 79,
+      "length": 10
+    }
+  },
+  {
+    "source": "test-vault/notes/sub/subnote.md",
+    "target": "test-vault/notes/note2.md",
+    "label": "note2",
+    "span": {
+      "offset": 32,
       "length": 9
     }
   },
@@ -18,65 +45,11 @@
     }
   },
   {
-    "source": "test-vault/notes/negatives/broken-link.md",
-    "target": "test-vault/notes/negatives/ghost-note",
-    "label": "ghost-note",
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/mcp-test.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+    "label": "note1",
     "span": {
-      "offset": 85,
-      "length": 14
-    }
-  },
-  {
-    "source": "test-vault/notes/negatives/multiple-errors.md",
-    "target": "test-vault/notes/negatives/nowhere",
-    "label": "nowhere",
-    "span": {
-      "offset": 134,
-      "length": 11
-    }
-  },
-  {
-    "source": "test-vault/notes/broken-link-test.md",
-    "target": "test-vault/notes/nonexistent-file",
-    "label": "nonexistent-file",
-    "span": {
-      "offset": 0,
-      "length": 20
-    }
-  },
-  {
-    "source": "test-vault/notes/negatives/circ-a.md",
-    "target": "test-vault/notes/negatives/circ-b.md",
-    "label": "circ-b",
-    "span": {
-      "offset": 79,
-      "length": 10
-    }
-  },
-  {
-    "source": "test-vault/notes/note1.md",
-    "target": "test-vault/notes/note2.md",
-    "label": "note2",
-    "span": {
-      "offset": 66,
-      "length": 9
-    }
-  },
-  {
-    "source": "test-vault/notes/negatives/ambiguous-source.md",
-    "target": "test-vault/notes/negatives/a",
-    "label": "a",
-    "span": {
-      "offset": 125,
-      "length": 5
-    }
-  },
-  {
-    "source": "test-vault/notes/sub/subnote.md",
-    "target": "test-vault/notes/note2.md",
-    "label": "note2",
-    "span": {
-      "offset": 32,
+      "offset": 22,
       "length": 9
     }
   },
@@ -117,11 +90,38 @@
     }
   },
   {
-    "source": "test-vault/notes/mcp-test.md",
+    "source": "test-vault/notes/negatives/broken-link.md",
+    "target": "test-vault/notes/negatives/ghost-note",
+    "label": "ghost-note",
+    "span": {
+      "offset": 85,
+      "length": 14
+    }
+  },
+  {
+    "source": "test-vault/notes/sub/archive/old.md",
     "target": "test-vault/notes/note1.md",
     "label": "note1",
     "span": {
-      "offset": 22,
+      "offset": 33,
+      "length": 9
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note3.md",
+    "label": "note3",
+    "span": {
+      "offset": 49,
+      "length": 9
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/subnote.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
+    "label": "note2",
+    "span": {
+      "offset": 32,
       "length": 9
     }
   },
@@ -132,6 +132,132 @@
     "span": {
       "offset": 13,
       "length": 9
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/broken-link.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/ghost-note",
+    "label": "ghost-note",
+    "span": {
+      "offset": 85,
+      "length": 14
+    }
+  },
+  {
+    "source": "test-vault/notes/negatives/multiple-errors.md",
+    "target": "test-vault/notes/negatives/nowhere",
+    "label": "nowhere",
+    "span": {
+      "offset": 134,
+      "length": 11
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/circ-b.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/circ-a.md",
+    "label": "circ-a",
+    "span": {
+      "offset": 79,
+      "length": 10
+    }
+  },
+  {
+    "source": "test-vault/notes/broken-link-test.md",
+    "target": "test-vault/notes/nonexistent-file",
+    "label": "nonexistent-file",
+    "span": {
+      "offset": 0,
+      "length": 20
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/circ-a.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/circ-b.md",
+    "label": "circ-b",
+    "span": {
+      "offset": 79,
+      "length": 10
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/broken-link-test.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/nonexistent-file",
+    "label": "nonexistent-file",
+    "span": {
+      "offset": 0,
+      "length": 20
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/multiple-errors.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/nowhere",
+    "label": "nowhere",
+    "span": {
+      "offset": 134,
+      "length": 11
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+    "label": "note1",
+    "span": {
+      "offset": 45,
+      "length": 9
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/subnote.md",
+    "label": "subnote",
+    "span": {
+      "offset": 55,
+      "length": 11
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/multi-links.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note2.md",
+    "label": "Alias to Note 2",
+    "span": {
+      "offset": 67,
+      "length": 25
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/sub/archive/old.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/note1.md",
+    "label": "note1",
+    "span": {
+      "offset": 33,
+      "length": 9
+    }
+  },
+  {
+    "source": "test-vault/notes/negatives/ambiguous-source.md",
+    "target": "test-vault/notes/negatives/a",
+    "label": "a",
+    "span": {
+      "offset": 125,
+      "length": 5
+    }
+  },
+  {
+    "source": "test-vault/notes/mcp-test.md",
+    "target": "test-vault/notes/note1.md",
+    "label": "note1",
+    "span": {
+      "offset": 22,
+      "length": 9
+    }
+  },
+  {
+    "source": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/ambiguous-source.md",
+    "target": "/Users/mkheyfets/GolandProjects/simpler-notes/test-vault/notes/negatives/a",
+    "label": "a",
+    "span": {
+      "offset": 125,
+      "length": 5
     }
   }
 ]

@@ -9,6 +9,7 @@ gpui-platform = { git = "https://github.com/zed-industries/zed", package = "gpui
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
 gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
 simpler-notes-core = { path = "../simpler-notes-core" }
+sn-ui = { path = "../sn-ui" }
 parking_lot = "0.12"
 pathdiff = "0.2"
 walkdir = "2"
