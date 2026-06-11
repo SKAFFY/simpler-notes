@@ -1,4 +1,5 @@
 pub mod app;
+pub mod command;
 pub mod workspace;
 pub mod panel;
 pub mod dock;
